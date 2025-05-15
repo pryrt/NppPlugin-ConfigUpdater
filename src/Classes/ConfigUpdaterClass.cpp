@@ -1,7 +1,8 @@
 #include "ConfigUpdaterClass.h"
 
 // delete null characters from padded wstrings				// private function (invisible to outside world)
-void delNull(std::wstring& str) {
+void delNull(std::wstring& str)
+{
 	const auto pos = str.find(L'\0');
 	if (pos != std::wstring::npos) {
 		str.erase(pos);
@@ -9,7 +10,8 @@ void delNull(std::wstring& str) {
 };
 
 // convert wstring to UTF8-encoded bytes in std::string		// private function (invisible to outside world)
-std::string wstring_to_utf8(std::wstring& wstr) {
+std::string wstring_to_utf8(std::wstring& wstr)
+{
 	if (wstr.empty()) return std::string();
 	int szNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), NULL, 0, NULL, NULL);
 	if (szNeeded == 0) return std::string();
@@ -20,13 +22,15 @@ std::string wstring_to_utf8(std::wstring& wstr) {
 }
 
 
-ConfigUpdater::ConfigUpdater(HWND hwndNpp) {
+ConfigUpdater::ConfigUpdater(HWND hwndNpp)
+{
 	_hwndNPP = hwndNpp;
 	_populateNppDirs();
 	_initInternalState();
 };
 
-void ConfigUpdater::_initInternalState(void) {
+void ConfigUpdater::_initInternalState(void)
+{
 	_wsSavedComment = L"";
 	_bHasTopLevelComment = false;
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
@@ -34,7 +38,8 @@ void ConfigUpdater::_initInternalState(void) {
 	_mapModelDefaultColors["bgColor"] = "";
 }
 
-void ConfigUpdater::_populateNppDirs(void) {
+void ConfigUpdater::_populateNppDirs(void)
+{
 	// %AppData%\Notepad++\Plugins\Config or equiv
 	LRESULT sz = 1 + ::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, 0, NULL);
 	std::wstring pluginCfgDir(sz, '\0');
@@ -67,16 +72,20 @@ void ConfigUpdater::_populateNppDirs(void) {
 	std::wstring exeDir(MAX_PATH, '\0');
 	::SendMessage(_hwndNPP, NPPM_GETNPPDIRECTORY, MAX_PATH, reinterpret_cast<LPARAM>(exeDir.data()));
 	delNull(exeDir);
-	_nppAppDir = exeDir;
 	_nppCfgAutoCompletionDir = exeDir + L"\\autoCompletion";
+
+	// also, want to save the app directory and the themes relative to the app (because themes can be found in _both_ locations)
+	_nppAppDir = exeDir;
+	_nppAppThemesDir = _nppAppDir + L"\\themes";
 
 	return;
 }
 
-void ConfigUpdater::go(void)
+void ConfigUpdater::go(bool isIntermediateSorted)
 {
 	_initInternalState();
 	_getModelStyler();
+	_updateAllThemes(isIntermediateSorted);
 	return;
 }
 
@@ -113,4 +122,52 @@ void ConfigUpdater::_getModelStyler(void)
 	}
 
 	return;
+}
+
+// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
+void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
+{
+	bool DEBUG = true;
+	_updateOneTheme(_nppCfgDir, L"stylers.xml", isIntermediateSorted);
+	if (DEBUG) return;
+
+	DWORD szNeeded = GetCurrentDirectory(0, NULL);
+	std::wstring curDir(szNeeded, L'\0');
+	if(!GetCurrentDirectory(szNeeded, const_cast<LPWSTR>(curDir.data()))) return;
+
+	HANDLE fhFound;
+	WIN32_FIND_DATAW infoFound;
+	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
+	for (auto wsDir : themeDirs ) {
+		if (PathFileExists(wsDir.c_str())) {
+			if (!SetCurrentDirectory(wsDir.c_str())) return;
+			fhFound = FindFirstFile(L"*.xml", &infoFound);
+			if (fhFound != INVALID_HANDLE_VALUE) {
+				bool stillFound = true;
+				while (stillFound) {
+					// process this file
+					stillFound &= _updateOneTheme(wsDir, infoFound.cFileName, isIntermediateSorted);
+
+					// look for next file
+					stillFound &= static_cast<bool>(FindNextFile(fhFound, &infoFound));
+					// static cast needed because bool and BOOL are not actually the same
+				}
+			}
+			if (!SetCurrentDirectory(curDir.c_str())) return;
+		}
+	}
+
+	return;
+}
+
+// Updates one particular theme or styler file
+bool ConfigUpdater::_updateOneTheme(std::wstring /*themeDir*/, std::wstring /*themeName*/, bool /*isIntermediateSorted*/)
+{
+	//std::string themeDir8 = wstring_to_utf8(themeDir);
+	//std::string themeName8 = wstring_to_utf8(themeName);
+	// TODO: isWriteable test needs to go in here:
+	//		when asking, YES=restart, NO=not for this file, CANCEL=stop asking;
+	//		(use a new instance property to store the CANCEL answer)
+
+	return true;
 }
