@@ -19,13 +19,26 @@ private:
 	std::wstring _wsSavedComment;
 	bool _bHasTopLevelComment;
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
-	std::map<std::string, std::string> _mapModelDefaultColors;
+	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
 
 	void _initInternalState(void);																				// sets internal attributes back to default
 	void _getModelStyler(void);																					// gets the XML
 	void _updateAllThemes(bool isIntermediateSorted = false);													// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
 	bool _updateOneTheme(std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted = false);		// Updates one particular theme or styler file
 	bool _isAskRestartCancelled = false;																		// Remember whether CANCEL was chosen when asking to restart while looping through themes
+
+	////////////////////////////////
+	// XML Helpers
+	////////////////////////////////
+
+	// grab the default style element out of the given theme XML
+	tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument& oDoc);
+
+	// look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
+	tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue);
+
+	////////////////////////////////
+	////////////////////////////////
 
 	// keeps track of the tinyxml2 Document and Root Node for a given XML file
 	struct stXml {

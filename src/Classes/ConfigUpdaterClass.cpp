@@ -102,9 +102,19 @@ void ConfigUpdater::_getModelStyler(void)
 		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &_stylers_model_xml.oDoc);
 	}
 
+	auto elDefaultStyle = _get_default_style_element(_stylers_model_xml.oDoc);
+	_mapModelDefaultColors["fgColor"] = elDefaultStyle->Attribute("fgColor");
+	_mapModelDefaultColors["bgColor"] = elDefaultStyle->Attribute("bgColor");
+
+	return;
+}
+
+// grab the default style element out of the given theme XML
+tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument& oDoc)
+{
 	// tinyxml2 doesn't have XPath, and my attempts at adding on tixml2ex.h's find_element() couldn't seem to ever find any element, even the root
 	//	so switch to manual navigation.
-	tinyxml2::XMLElement* pSearch = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus");
+	tinyxml2::XMLElement* pSearch = oDoc.FirstChildElement("NotepadPlus");
 	if (pSearch) pSearch = pSearch->FirstChildElement("GlobalStyles");
 	if (pSearch) pSearch = pSearch->FirstChildElement("WidgetStyle");
 	while (pSearch) {
@@ -113,15 +123,10 @@ void ConfigUpdater::_getModelStyler(void)
 		}
 		pSearch = pSearch->NextSiblingElement();
 	}
-	if (pSearch) {
-		_mapModelDefaultColors["fgColor"] = pSearch->Attribute("fgColor");
-		_mapModelDefaultColors["bgColor"] = pSearch->Attribute("bgColor");
+	if (!pSearch) {
+		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDoc);
 	}
-	else {
-		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &_stylers_model_xml.oDoc);
-	}
-
-	return;
+	return pSearch;
 }
 
 // loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
@@ -161,13 +166,85 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 }
 
 // Updates one particular theme or styler file
-bool ConfigUpdater::_updateOneTheme(std::wstring /*themeDir*/, std::wstring /*themeName*/, bool /*isIntermediateSorted*/)
+bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
 {
-	//std::string themeDir8 = wstring_to_utf8(themeDir);
-	//std::string themeName8 = wstring_to_utf8(themeName);
-	// TODO: isWriteable test needs to go in here:
+	// TODO: isWriteable test needs to go in here somewhere:
 	//		when asking, YES=restart, NO=not for this file, CANCEL=stop asking;
 	//		(use a new instance property to store the CANCEL answer)
 
+	// get full path to file
+	delNull(themeDir);
+	delNull(themeName);
+	std::wstring themePath = themeDir + L"\\" + themeName;
+	std::string themePath8 = wstring_to_utf8(themePath);
+
+	// I don't know yet whether tinyxml2 has the TopLevelComment problem that py::xml.etree has.  I will have to watch out for that
+	// remove comment from previous call of update_stylers(), otherwise no-comment myTheme.xml would inherit comment from commented MossyLawn.xml (from .py:2024-Aug-29 bugfix)
+	_wsSavedComment = L"";
+	_bHasTopLevelComment = false;
+
+	// get the XML
+	tinyxml2::XMLDocument oStylerDoc;
+	tinyxml2::XMLError eResult = oStylerDoc.LoadFile(themePath8.c_str());
+	_xml_check_result(eResult, &oStylerDoc);
+	tinyxml2::XMLElement* pStylerRoot = oStylerDoc.RootElement();
+	if(pStylerRoot==NULL) _xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc);
+	// TODO: if I need to track the top-level comment, I am hoping that I can test oStylerDoc.FirstChild vs pStylerRoot
+
+	if (isIntermediateSorted) {
+		1;	// TODO: make the unsorted intermediate file; skip that for now.
+	}
+
+	// Grab the default attributes from the <GlobalStyles><WidgetStyle name = "Global override" styleID = "0"...>
+	tinyxml2::XMLElement* pDefaultStyle = _get_default_style_element(oStylerDoc);
+	_mapStylerDefaultColors["fgColor"] = pDefaultStyle->Attribute("fgColor");
+	_mapStylerDefaultColors["bgColor"] = pDefaultStyle->Attribute("bgColor");
+
+	// grab the theme's LexerStyles node for future insertions
+	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+	tinyxml2::XMLElement* pElModelLexerStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+
+	// want to keep the colors from the .model. when editing stylers.xml, but none of the others
+	bool keepModelColors = (themeName == std::wstring(L"stylers.xml"));
+
+	// iterate through all the Model's lexer types, and see if there are any LexerTypes that cannot also be found in Theme
+	tinyxml2::XMLElement* pElModelLexerType = pElModelLexerStyles->FirstChildElement("LexerType");
+	tinyxml2::XMLElement* pElThemeLexerType =  pElThemeLexerStyles->FirstChildElement("LexerType");
+	while (pElModelLexerType) {
+		// get the name of this ModelLexerType
+		std::string sModelLexerTypeName = pElModelLexerType->Attribute("name");
+
+		// Look through through this theme to find out if it has the a LexerType with the same name
+		tinyxml2::XMLElement* pSearchResult = _find_element_with_attribute_value(pElThemeLexerStyles, pElThemeLexerType, "LexerType", "name", sModelLexerTypeName);
+		if (!pSearchResult) {
+			// PY::#212#	if LexerType not found in theme, need to copy the whole lexer type from the Model to the Theme
+		}
+		else {
+			// PY::#215#	if LexerType exists in theme, need to check its contents
+		}
+
+		// then move to next
+		pElModelLexerType = pElModelLexerType->NextSiblingElement("LexerType");
+	}
+
+
+	return !!keepModelColors;
 	return true;
+}
+
+// look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
+tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue)
+{
+	if (!pParent && !pFirst) return nullptr;
+	tinyxml2::XMLElement* pMyParent = pParent ? pParent->ToElement() : pFirst->Parent()->ToElement();
+	tinyxml2::XMLElement* pFoundElement = pFirst ? pFirst->ToElement() : pMyParent->FirstChildElement(sElementType.c_str())->ToElement();
+	while (pFoundElement) {
+		// if this node has the right attribute pair, great!
+		if (pFoundElement->Attribute(sAttributeName.c_str(), sAttributeValue.c_str()))
+			return pFoundElement;
+
+		// otherwise, move on to next
+		pFoundElement = pFoundElement->NextSiblingElement(sElementType.c_str());
+	}
+	return pFoundElement;
 }
