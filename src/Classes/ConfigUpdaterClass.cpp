@@ -1,4 +1,5 @@
 #include "ConfigUpdaterClass.h"
+extern NppData nppData;
 
 // delete null characters from padded wstrings				// private function (invisible to outside world)
 void delNull(std::wstring& str)
@@ -21,6 +22,50 @@ std::string wstring_to_utf8(std::wstring& wstr)
 	return str;
 }
 
+// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the correct scintilla HWND
+HWND ConfigUpdater::_consoleCheck()
+{
+	if (!_uOutBufferID) {
+		// creates it if necessary
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_NEW);
+		_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
+		::SendMessage(_hwndNPP, NPPM_SETUNTITLEDNAME, static_cast<WPARAM>(_uOutBufferID), reinterpret_cast<LPARAM>(L"ConfigUpdater.log"));
+		::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+	}
+
+	// get the View and Index
+	LRESULT res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
+	WPARAM view = (res & 0xC0000000) >> 30;	// upper bits are view
+	LPARAM index = res & 0x3FFFFFFF;		// lower bits are index
+
+	// activate
+	::SendMessage(_hwndNPP, NPPM_ACTIVATEDOC, view, index);
+
+	// return the correct scintilla HWND
+	return view ? nppData._scintillaSecondHandle : nppData._scintillaMainHandle;
+}
+
+// Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change/error, "^--- "=message
+void ConfigUpdater::_consoleWrite(std::wstring wsStr)
+{
+	std::string msg = wstring_to_utf8(wsStr) + "\n";
+	_consoleWrite(msg.c_str());
+}
+void ConfigUpdater::_consoleWrite(std::string sStr)
+{
+	std::string msg = sStr + "\n";
+	_consoleWrite(msg.c_str());
+}
+void ConfigUpdater::_consoleWrite(LPCWSTR wcStr)
+{
+	std::wstring msg(wcStr);
+	_consoleWrite(msg);
+}
+void ConfigUpdater::_consoleWrite(LPCSTR cStr)
+{
+	HWND hEditor = _consoleCheck();
+	::SendMessageA(hEditor, SCI_ADDTEXT, static_cast<WPARAM>(strlen(cStr)), reinterpret_cast<LPARAM>(cStr));
+}
 
 ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 {
@@ -31,6 +76,7 @@ ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 
 void ConfigUpdater::_initInternalState(void)
 {
+	_uOutBufferID = 0;
 	_wsSavedComment = L"";
 	_bHasTopLevelComment = false;
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
@@ -86,6 +132,7 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_initInternalState();
 	_getModelStyler();
 	_updateAllThemes(isIntermediateSorted);
+	if (isIntermediateSorted) return;
 	return;
 }
 
@@ -177,6 +224,7 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 	delNull(themeName);
 	std::wstring themePath = themeDir + L"\\" + themeName;
 	std::string themePath8 = wstring_to_utf8(themePath);
+	_consoleWrite(std::wstring(L"--- Checking Styler/Theme File: '") + themePath + L"'");
 
 	// I don't know yet whether tinyxml2 has the TopLevelComment problem that py::xml.etree has.  I will have to watch out for that
 	// remove comment from previous call of update_stylers(), otherwise no-comment myTheme.xml would inherit comment from commented MossyLawn.xml (from .py:2024-Aug-29 bugfix)
@@ -224,11 +272,9 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 			}
 			pElThemeLexerStyles->InsertEndChild(pClone);
 
-			FILE* fp = fopen("C:\\usr\\local\\share\\TempData\\Npp\\tmp.xml", "wt");
-			tinyxml2::XMLPrinter printer(fp);
+			tinyxml2::XMLPrinter printer;
 			oStylerDoc.Print(&printer);
-			//::MessageBoxA(NULL, printer.CStr(), "DebugPrint", MB_OK);
-			fclose(fp);
+			_consoleWrite(printer.CStr());
 		}
 		else {
 			// PY::#215#	if LexerType exists in theme, need to check its contents
@@ -238,8 +284,6 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 		pElModelLexerType = pElModelLexerType->NextSiblingElement("LexerType");
 	}
 
-
-	return !!keepModelColors;
 	return true;
 }
 

@@ -7,6 +7,7 @@
 #include <pathcch.h>
 #include <shlwapi.h>
 #include "PluginDefinition.h"
+#include "menuCmdID.h"
 #include "tinyxml2.h"
 
 class ConfigUpdater {
@@ -16,10 +17,20 @@ public:
 
 private:
 	// internal attributes
-	std::wstring _wsSavedComment;
-	bool _bHasTopLevelComment;
+	UINT_PTR _uOutBufferID;																						// stores BufferID for plugin output
+	std::wstring _wsSavedComment;																				// TODO: stores TopLevel comment, if needed
+	bool _bHasTopLevelComment;																					// TODO: tracks TopLevel comment, if needed
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
 	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
+
+	// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the correct scintilla HWND
+	HWND _consoleCheck();
+
+	// Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change, "^--- "=message
+	void _consoleWrite(std::wstring wsStr);
+	void _consoleWrite(std::string sStr);
+	void _consoleWrite(LPCWSTR wcStr);
+	void _consoleWrite(LPCSTR cStr);
 
 	void _initInternalState(void);																				// sets internal attributes back to default
 	void _getModelStyler(void);																					// gets the XML
