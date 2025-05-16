@@ -25,16 +25,18 @@ std::string wstring_to_utf8(std::wstring& wstr)
 // Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the correct scintilla HWND
 HWND ConfigUpdater::_consoleCheck()
 {
-	if (!_uOutBufferID) {
+	LRESULT res = _uOutBufferID ? ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0) : -1;
+	if (res==-1) {
 		// creates it if necessary
+		wchar_t wcTabName[] = L"ConfigUpdater.log";
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_NEW);
 		_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
-		::SendMessage(_hwndNPP, NPPM_SETUNTITLEDNAME, static_cast<WPARAM>(_uOutBufferID), reinterpret_cast<LPARAM>(L"ConfigUpdater.log"));
+		::SendMessage(_hwndNPP, NPPM_SETUNTITLEDNAME, static_cast<WPARAM>(_uOutBufferID), reinterpret_cast<LPARAM>(wcTabName));
 		::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+		res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
 	}
 
-	// get the View and Index
-	LRESULT res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
+	// get the View and Index from the previous
 	WPARAM view = (res & 0xC0000000) >> 30;	// upper bits are view
 	LPARAM index = res & 0x3FFFFFFF;		// lower bits are index
 
@@ -82,7 +84,6 @@ ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 
 void ConfigUpdater::_initInternalState(void)
 {
-	_uOutBufferID = 0;
 	_wsSavedComment = L"";
 	_bHasTopLevelComment = false;
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
@@ -309,13 +310,13 @@ void ConfigUpdater::_addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType
 	tinyxml2::XMLElement* pClone = pElModelLexerType->DeepClone(pStylerDoc)->ToElement();
 
 	// loop through all the clone's children:
-	//		- font info gets cleared (never inherit fonts from .model.)
-	//		- colors changed to theme defaults if !keepModelColors
 	tinyxml2::XMLElement* pThemeWordsStyle = pClone->FirstChildElement("WordsStyle");
 	while (pThemeWordsStyle) {
+		//		- font info gets cleared (never inherit fonts from .model.)
 		pThemeWordsStyle->SetAttribute("fontName", "");
 		pThemeWordsStyle->SetAttribute("fontStyle", "");
 		pThemeWordsStyle->SetAttribute("fontSize", "");
+		//		- colors changed to theme defaults if !keepModelColors
 		if (!keepModelColors) {
 			pThemeWordsStyle->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
 			pThemeWordsStyle->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
@@ -325,10 +326,71 @@ void ConfigUpdater::_addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType
 	}
 
 	pElThemeLexerStyles->InsertEndChild(pClone);
+	std::string msg = std::string("+ Add missing Lexer '") + pClone->Attribute("name") + "'";
+	_consoleWrite(msg);
 	_consoleWrite(pElThemeLexerStyles);
 }
 
-void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* /*pElModelLexerType*/, tinyxml2::XMLElement* /*pElThemeLexerType*/, bool /*keepModelColors*/)
+void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors )
 {
-	//tinyxml2::XMLDocument* pStylerDoc = pElThemeLexerType->GetDocument();
+	tinyxml2::XMLDocument* pStylerDoc = pElThemeLexerType->GetDocument();
+	std::string sLexerName = pElModelLexerType->Attribute("name");
+
+	// loop through all the model's children, and see if the Theme as 
+	tinyxml2::XMLElement* pModelWordsStyle = pElModelLexerType->FirstChildElement("WordsStyle");
+	while (pModelWordsStyle) {
+		std::string sStyleID = pModelWordsStyle->Attribute("styleID");
+		std::string sStyleName = pModelWordsStyle->Attribute("name");
+		tinyxml2::XMLElement* pSearchResult = _find_element_with_attribute_value(pElThemeLexerType, nullptr, "WordsStyle", "styleID", sStyleID);
+		if (!pSearchResult) {
+			// this WordsStyle not found in theme, so need to add it
+			tinyxml2::XMLElement* pClone = pModelWordsStyle->DeepClone(pStylerDoc)->ToElement();
+			//		- font info gets cleared (never inherit fonts from .model.)
+			pClone->SetAttribute("fontName", "");
+			pClone->SetAttribute("fontStyle", "");
+			pClone->SetAttribute("fontSize", "");
+			//		- colors changed to theme defaults if !keepModelColors
+			if (!keepModelColors) {
+				pClone->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
+				pClone->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
+			}
+			// add the clone as a child of the theme's LexerType element
+			pSearchResult = pElThemeLexerType->InsertEndChild(pClone)->ToElement();
+			std::string msg = std::string("+ Lexer '") + sLexerName + "': added missing style #" + sStyleID + "='" + sStyleName + "'";
+			_consoleWrite(msg);
+			//_consoleWrite(pElThemeLexerType);
+		}
+		else {
+			// for names that have changed in the model, update the theme to match the model's name (keeps up-to-date with the most recent model)
+			std::string sOldName = pSearchResult->Attribute("name");
+			if (sStyleName != sOldName) {
+				pSearchResult->SetAttribute("name", sStyleName.c_str());
+				std::string msg = std::string("! Lexer '") + sLexerName + "': renamed styleID#" + sStyleID + " from '" + sOldName + "' to '" + sStyleName + "'";
+				_consoleWrite(msg);
+			}
+
+			// [python:2024-Aug-28 BUGFIX] = for existing styles, check .model. to see if they need a keywordClass that they don't have
+			std::string sModelKeywordClass = pModelWordsStyle->Attribute("keywordClass") ? pModelWordsStyle->Attribute("keywordClass") : "";
+			if (sModelKeywordClass.length()) {
+				// if the model has a keyword class, check the theme as well:
+				std::string sThemeKeywordClass = pSearchResult->Attribute("keywordClass") ? pSearchResult->Attribute("keywordClass") : "";
+				if (sThemeKeywordClass == "") {
+					// theme had no keyword class
+					pSearchResult->SetAttribute("keywordClass", sModelKeywordClass.c_str());
+					std::string msg = std::string("+ Lexer '") + sLexerName + "': added missing keywordClass='" + sModelKeywordClass + "' to styleID#" + sStyleID + "='" + sStyleName + "'";
+					_consoleWrite(msg);
+				}
+				else if (sModelKeywordClass != sThemeKeywordClass) {
+					// theme had wrong keyword class
+					pSearchResult->SetAttribute("keywordClass", sModelKeywordClass.c_str());
+					std::string msg = std::string("! Lexer '") + sLexerName + "': fixed incorrect keywordClass='" + sThemeKeywordClass + "' to '" + sModelKeywordClass + "' in styleID#" + sStyleID + "='" + sStyleName + "'";
+					_consoleWrite(msg);
+				}
+			}
+			2;
+		}
+		pModelWordsStyle = pModelWordsStyle->NextSiblingElement("WordsStyle");
+	}
+
+	return;
 }

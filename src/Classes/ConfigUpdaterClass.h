@@ -17,7 +17,7 @@ public:
 
 private:
 	// internal attributes
-	UINT_PTR _uOutBufferID;																						// stores BufferID for plugin output
+	UINT_PTR _uOutBufferID = 0;																					// stores BufferID for plugin output
 	std::wstring _wsSavedComment;																				// TODO: stores TopLevel comment, if needed
 	bool _bHasTopLevelComment;																					// TODO: tracks TopLevel comment, if needed
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
