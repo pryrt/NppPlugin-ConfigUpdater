@@ -15,6 +15,7 @@ vs.proj/*.exp
 vs.proj/*.lib
 vs.proj/*.vcxproj.user
 vs.proj/.vs/
+vs.proj/*temp*/
 *.aps
 *.zip
 *.bak

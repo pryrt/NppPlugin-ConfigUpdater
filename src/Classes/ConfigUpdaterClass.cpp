@@ -218,6 +218,17 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 		tinyxml2::XMLElement* pSearchResult = _find_element_with_attribute_value(pElThemeLexerStyles, pElThemeLexerType, "LexerType", "name", sModelLexerTypeName);
 		if (!pSearchResult) {
 			// PY::#212#	if LexerType not found in theme, need to copy the whole lexer type from the Model to the Theme
+			tinyxml2::XMLElement* pClone = pElModelLexerType->DeepClone(&oStylerDoc)->ToElement();
+			if (!keepModelColors) {
+				1; // TODO: loop through and replace all the fg/bg with this theme's default colors
+			}
+			pElThemeLexerStyles->InsertEndChild(pClone);
+
+			FILE* fp = fopen("C:\\usr\\local\\share\\TempData\\Npp\\tmp.xml", "wt");
+			tinyxml2::XMLPrinter printer(fp);
+			oStylerDoc.Print(&printer);
+			//::MessageBoxA(NULL, printer.CStr(), "DebugPrint", MB_OK);
+			fclose(fp);
 		}
 		else {
 			// PY::#215#	if LexerType exists in theme, need to check its contents
