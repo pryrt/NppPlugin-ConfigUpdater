@@ -31,11 +31,15 @@ private:
 	void _consoleWrite(std::string sStr);
 	void _consoleWrite(LPCWSTR wcStr);
 	void _consoleWrite(LPCSTR cStr);
+	void _consoleWrite(tinyxml2::XMLNode* pNode);
 
 	void _initInternalState(void);																				// sets internal attributes back to default
 	void _getModelStyler(void);																					// gets the XML
 	void _updateAllThemes(bool isIntermediateSorted = false);													// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
 	bool _updateOneTheme(std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted = false);		// Updates one particular theme or styler file
+	void _addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerStyles, bool keepModelColors);
+	void _addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors);
+
 	bool _isAskRestartCancelled = false;																		// Remember whether CANCEL was chosen when asking to restart while looping through themes
 
 	////////////////////////////////

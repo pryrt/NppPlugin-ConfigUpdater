@@ -66,6 +66,12 @@ void ConfigUpdater::_consoleWrite(LPCSTR cStr)
 	HWND hEditor = _consoleCheck();
 	::SendMessageA(hEditor, SCI_ADDTEXT, static_cast<WPARAM>(strlen(cStr)), reinterpret_cast<LPARAM>(cStr));
 }
+void ConfigUpdater::_consoleWrite(tinyxml2::XMLNode* pNode)
+{
+	tinyxml2::XMLPrinter printer;
+	pNode->Accept(&printer);
+	_consoleWrite(printer.CStr());
+}
 
 ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 {
@@ -266,18 +272,11 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 		tinyxml2::XMLElement* pSearchResult = _find_element_with_attribute_value(pElThemeLexerStyles, pElThemeLexerType, "LexerType", "name", sModelLexerTypeName);
 		if (!pSearchResult) {
 			// PY::#212#	if LexerType not found in theme, need to copy the whole lexer type from the Model to the Theme
-			tinyxml2::XMLElement* pClone = pElModelLexerType->DeepClone(&oStylerDoc)->ToElement();
-			if (!keepModelColors) {
-				1; // TODO: loop through and replace all the fg/bg with this theme's default colors
-			}
-			pElThemeLexerStyles->InsertEndChild(pClone);
-
-			tinyxml2::XMLPrinter printer;
-			oStylerDoc.Print(&printer);
-			_consoleWrite(printer.CStr());
+			_addMissingLexerType(pElModelLexerType, pElThemeLexerStyles, keepModelColors);
 		}
 		else {
 			// PY::#215#	if LexerType exists in theme, need to check its contents
+			_addMissingLexerStyles(pElModelLexerType, pSearchResult, keepModelColors);
 		}
 
 		// then move to next
@@ -302,4 +301,34 @@ tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2
 		pFoundElement = pFoundElement->NextSiblingElement(sElementType.c_str());
 	}
 	return pFoundElement;
+}
+
+void ConfigUpdater::_addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerStyles, bool keepModelColors)
+{
+	tinyxml2::XMLDocument* pStylerDoc = pElThemeLexerStyles->GetDocument();
+	tinyxml2::XMLElement* pClone = pElModelLexerType->DeepClone(pStylerDoc)->ToElement();
+
+	// loop through all the clone's children:
+	//		- font info gets cleared (never inherit fonts from .model.)
+	//		- colors changed to theme defaults if !keepModelColors
+	tinyxml2::XMLElement* pThemeWordsStyle = pClone->FirstChildElement("WordsStyle");
+	while (pThemeWordsStyle) {
+		pThemeWordsStyle->SetAttribute("fontName", "");
+		pThemeWordsStyle->SetAttribute("fontStyle", "");
+		pThemeWordsStyle->SetAttribute("fontSize", "");
+		if (!keepModelColors) {
+			pThemeWordsStyle->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
+			pThemeWordsStyle->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
+		}
+		// then move to next
+		pThemeWordsStyle = pThemeWordsStyle->NextSiblingElement("WordsStyle");
+	}
+
+	pElThemeLexerStyles->InsertEndChild(pClone);
+	_consoleWrite(pElThemeLexerStyles);
+}
+
+void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* /*pElModelLexerType*/, tinyxml2::XMLElement* /*pElThemeLexerType*/, bool /*keepModelColors*/)
+{
+	//tinyxml2::XMLDocument* pStylerDoc = pElThemeLexerType->GetDocument();
 }
