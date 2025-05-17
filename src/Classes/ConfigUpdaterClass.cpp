@@ -26,7 +26,7 @@ std::string wstring_to_utf8(std::wstring& wstr)
 HWND ConfigUpdater::_consoleCheck()
 {
 	LRESULT res = _uOutBufferID ? ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0) : -1;
-	if (res==-1) {
+	if (res == -1) {
 		// creates it if necessary
 		wchar_t wcTabName[] = L"ConfigUpdater.log";
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_NEW);
@@ -192,12 +192,12 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 
 	DWORD szNeeded = GetCurrentDirectory(0, NULL);
 	std::wstring curDir(szNeeded, L'\0');
-	if(!GetCurrentDirectory(szNeeded, const_cast<LPWSTR>(curDir.data()))) return;
+	if (!GetCurrentDirectory(szNeeded, const_cast<LPWSTR>(curDir.data()))) return;
 
 	HANDLE fhFound;
 	WIN32_FIND_DATAW infoFound;
 	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
-	for (auto wsDir : themeDirs ) {
+	for (auto wsDir : themeDirs) {
 		if (PathFileExists(wsDir.c_str())) {
 			if (!SetCurrentDirectory(wsDir.c_str())) return;
 			fhFound = FindFirstFile(L"*.xml", &infoFound);
@@ -243,7 +243,7 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 	tinyxml2::XMLError eResult = oStylerDoc.LoadFile(themePath8.c_str());
 	_xml_check_result(eResult, &oStylerDoc);
 	tinyxml2::XMLElement* pStylerRoot = oStylerDoc.RootElement();
-	if(pStylerRoot==NULL) _xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc);
+	if (pStylerRoot == NULL) _xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc);
 	// TODO: if I need to track the top-level comment, I am hoping that I can test oStylerDoc.FirstChild vs pStylerRoot
 
 	if (isIntermediateSorted) {
@@ -264,7 +264,7 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 
 	// iterate through all the Model's lexer types, and see if there are any LexerTypes that cannot also be found in Theme
 	tinyxml2::XMLElement* pElModelLexerType = pElModelLexerStyles->FirstChildElement("LexerType");
-	tinyxml2::XMLElement* pElThemeLexerType =  pElThemeLexerStyles->FirstChildElement("LexerType");
+	tinyxml2::XMLElement* pElThemeLexerType = pElThemeLexerStyles->FirstChildElement("LexerType");
 	while (pElModelLexerType) {
 		// get the name of this ModelLexerType
 		std::string sModelLexerTypeName = pElModelLexerType->Attribute("name");
@@ -284,19 +284,58 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 		pElModelLexerType = pElModelLexerType->NextSiblingElement("LexerType");
 	}
 
+	// TODO: sort the LexerType nodes by name (keeping searchResult _last_)
+	1;
+
+	// Look for missing GlobalStyles::WidgetStyle entries as well
+	tinyxml2::XMLElement* pElThemeGlobalStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
+	tinyxml2::XMLElement* pElModelGlobalStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
+	_addMissingGlobalWidgets(pElModelGlobalStyles, pElThemeGlobalStyles, keepModelColors);
+
+	// Write XML output
+	3;
+
+
 	return true;
 }
 
+// private: case-insensitive std::string comparison
+bool _pvt_stringicmp(std::string a, std::string b)
+{
+	std::string a_copy = a;
+	std::string b_copy = b;
+	// ignore conversion of int to char implicit in the <algorithm>std::transform, which I have no control over
+#pragma warning(push)
+#pragma warning(disable: 4244)
+	auto all_lower = [](std::string s) { std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); }); };
+	//auto tl = [](unsigned char c) { return std::tolower(c); };
+	//std::transform(sAttrRead.begin(), sAttrRead.end(), sAttrRead.begin(), tl);
+	//std::transform(sAttrCmpr.begin(), sAttrCmpr.end(), sAttrCmpr.begin(), tl);
+	all_lower(a_copy);
+	all_lower(b_copy);
+#pragma warning(pop)
+	return a_copy == b_copy;
+}
+
 // look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
-tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue)
+tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue, bool caseSensitive)
 {
 	if (!pParent && !pFirst) return nullptr;
 	tinyxml2::XMLElement* pMyParent = pParent ? pParent->ToElement() : pFirst->Parent()->ToElement();
 	tinyxml2::XMLElement* pFoundElement = pFirst ? pFirst->ToElement() : pMyParent->FirstChildElement(sElementType.c_str())->ToElement();
 	while (pFoundElement) {
 		// if this node has the right attribute pair, great!
-		if (pFoundElement->Attribute(sAttributeName.c_str(), sAttributeValue.c_str()))
-			return pFoundElement;
+		if (caseSensitive) {
+			if (pFoundElement->Attribute(sAttributeName.c_str(), sAttributeValue.c_str()))
+				return pFoundElement;
+		}
+		else {
+			const char* cAttrValue = pFoundElement->Attribute(sAttributeName.c_str());
+			if (cAttrValue) {
+				if (_pvt_stringicmp(sAttributeValue, cAttrValue))
+					return pFoundElement;
+			}
+		}
 
 		// otherwise, move on to next
 		pFoundElement = pFoundElement->NextSiblingElement(sElementType.c_str());
@@ -328,10 +367,9 @@ void ConfigUpdater::_addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType
 	pElThemeLexerStyles->InsertEndChild(pClone);
 	std::string msg = std::string("+ Add missing Lexer '") + pClone->Attribute("name") + "'";
 	_consoleWrite(msg);
-	_consoleWrite(pElThemeLexerStyles);
 }
 
-void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors )
+void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors)
 {
 	tinyxml2::XMLDocument* pStylerDoc = pElThemeLexerType->GetDocument();
 	std::string sLexerName = pElModelLexerType->Attribute("name");
@@ -393,4 +431,80 @@ void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerTy
 	}
 
 	return;
+}
+
+// clones any missing WidgetStyle entries from model to the theme (and fixes attributes)
+void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGlobalStyles, tinyxml2::XMLElement* pElThemeGlobalStyles, bool keepModelColors)
+{
+	tinyxml2::XMLDocument* pStylerDoc = pElThemeGlobalStyles->GetDocument();
+	tinyxml2::XMLElement* pNewContainer = pStylerDoc->NewElement("NewGlobalStyles");
+	pElThemeGlobalStyles->Parent()->InsertAfterChild(pElThemeGlobalStyles, pNewContainer);
+	//tinyxml2::XMLElement* pCommentZero, * pRecentComment;
+
+	// iterate through the nodes (comments and elements) of the model, and check if the theme has the equivalent or not
+	tinyxml2::XMLNode* pModelNode = pElModelGlobalStyles->FirstChild();
+	while (pModelNode) {
+		if (pModelNode->ToComment()) {
+			static std::string sCmpZero = " Attention : Don't modify the name of styleID=\"0\" ";
+			if (pModelNode->Value() == sCmpZero)
+				_consoleWrite(std::string("--- DEBUG: Found the ZeroComment: [") + pModelNode->Value() + "]");
+			else
+				_consoleWrite(std::string("--- DEBUG: Found Normal Comment: [") + pModelNode->Value() + "]");
+		}
+		else if (pModelNode->ToElement()) {
+			std::string sModelName = pModelNode->ToElement()->Attribute("name");
+			// do a case-insensitive search for this WidgetStyle's name in the theme:
+			tinyxml2::XMLElement* pFoundWidget = _find_element_with_attribute_value(pElThemeGlobalStyles, nullptr, "WidgetStyle", "name", sModelName, false);
+			if (pFoundWidget) {
+				bool updated = false;
+				// update missing attributes
+				if (!pFoundWidget->Attribute("fgColor")) {
+					pFoundWidget->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
+					updated = true;
+				}
+				if (!pFoundWidget->Attribute("bgColor")) {
+					pFoundWidget->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
+					updated = true;
+				}
+				if (!pFoundWidget->Attribute("fontName")) {
+					pFoundWidget->SetAttribute("fontName", "");
+					updated = true;
+				}
+				if (!pFoundWidget->Attribute("fontStyle")) {
+					pFoundWidget->SetAttribute("fontStyle", "");
+					updated = true;
+				}
+				if (!pFoundWidget->Attribute("fontSize")) {
+					pFoundWidget->SetAttribute("fontSize", "");
+					updated = true;
+				}
+
+				// move found element to the new container
+				pNewContainer->InsertEndChild(pFoundWidget);
+
+				if (updated) {
+					std::string msg = std::string("+ GlobalStyles: Updated attributes of existing WidgetStyle:'") + sModelName + "'";
+					_consoleWrite(msg);
+				}
+			}
+			else {
+				// else need to clone it from model
+				tinyxml2::XMLElement* pClone = pModelNode->DeepClone(pStylerDoc)->ToElement();
+				//		- colors changed to theme defaults if !keepModelColors
+				if (!keepModelColors) {
+					pClone->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
+					pClone->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
+				}
+
+				pNewContainer->InsertEndChild(pClone);
+
+				std::string msg = std::string("+ GlobalStyles: Added missing WidgetStyle:'") + sModelName + "'";
+				_consoleWrite(msg);
+			}
+		}
+		// then move to next node
+		pModelNode = pModelNode->NextSibling();
+	}
+
+	_consoleWrite(pStylerDoc);
 }
