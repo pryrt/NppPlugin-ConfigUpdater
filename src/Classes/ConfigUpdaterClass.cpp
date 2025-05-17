@@ -365,7 +365,7 @@ void ConfigUpdater::_addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType
 	}
 
 	pElThemeLexerStyles->InsertEndChild(pClone);
-	std::string msg = std::string("+ Add missing Lexer '") + pClone->Attribute("name") + "'";
+	std::string msg = std::string("+ LexerStyles: Add missing Lexer='") + pClone->Attribute("name") + "'";
 	_consoleWrite(msg);
 }
 
@@ -437,58 +437,51 @@ void ConfigUpdater::_addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerTy
 void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGlobalStyles, tinyxml2::XMLElement* pElThemeGlobalStyles, bool keepModelColors)
 {
 	tinyxml2::XMLDocument* pStylerDoc = pElThemeGlobalStyles->GetDocument();
-	tinyxml2::XMLElement* pNewContainer = pStylerDoc->NewElement("NewGlobalStyles");
+	tinyxml2::XMLElement* pNewContainer = pStylerDoc->NewElement("GlobalStyles");
 	pElThemeGlobalStyles->Parent()->InsertAfterChild(pElThemeGlobalStyles, pNewContainer);
-	//tinyxml2::XMLElement* pCommentZero, * pRecentComment;
+	//tinyxml2::XMLComment* pRecentComment;
 
 	// iterate through the nodes (comments and elements) of the model, and check if the theme has the equivalent or not
 	tinyxml2::XMLNode* pModelNode = pElModelGlobalStyles->FirstChild();
 	while (pModelNode) {
 		if (pModelNode->ToComment()) {
 			static std::string sCmpZero = " Attention : Don't modify the name of styleID=\"0\" ";
-			if (pModelNode->Value() == sCmpZero)
-				_consoleWrite(std::string("--- DEBUG: Found the ZeroComment: [") + pModelNode->Value() + "]");
-			else
-				_consoleWrite(std::string("--- DEBUG: Found Normal Comment: [") + pModelNode->Value() + "]");
+			if (pModelNode->Value() == sCmpZero) {
+				tinyxml2::XMLComment* pThemeZeroComment = pElThemeGlobalStyles->FirstChild()->ToComment();
+				if(pThemeZeroComment && (std::string(pThemeZeroComment->Value()) == sCmpZero)) {
+					; // doing nothing in true is more readable than negating the logic
+				}
+				else {
+					pThemeZeroComment = pModelNode->DeepClone(pStylerDoc)->ToComment();
+				}
+				pNewContainer->InsertFirstChild(pThemeZeroComment);
+			}
+			else {
+				std::string sModelComment = pModelNode->Value();
+				tinyxml2::XMLComment* pThemeCommentMatch = nullptr;
+				tinyxml2::XMLNode* pThemeNode = pElThemeGlobalStyles->FirstChild();
+				while (pThemeNode) {
+					if (pThemeNode->ToComment()) {
+						if (sModelComment == std::string(pThemeNode->Value())) {
+							pThemeCommentMatch = pThemeNode->ToComment();
+							break;
+						}
+					}
+					pThemeNode = pThemeNode->NextSibling();
+				}
+				if (!pThemeCommentMatch) {
+					pThemeCommentMatch = pModelNode->DeepClone(pStylerDoc)->ToComment();
+				}
+				pNewContainer->InsertEndChild(pThemeCommentMatch);
+			}
 		}
 		else if (pModelNode->ToElement()) {
+			static std::vector<const char*> attribs{ "fgColor", "bgColor", "fontName", "fontStyle", "fontSize" };
 			std::string sModelName = pModelNode->ToElement()->Attribute("name");
 			// do a case-insensitive search for this WidgetStyle's name in the theme:
 			tinyxml2::XMLElement* pFoundWidget = _find_element_with_attribute_value(pElThemeGlobalStyles, nullptr, "WidgetStyle", "name", sModelName, false);
-			if (pFoundWidget) {
-				bool updated = false;
-				// update missing attributes
-				if (!pFoundWidget->Attribute("fgColor")) {
-					pFoundWidget->SetAttribute("fgColor", _mapStylerDefaultColors["fgColor"].c_str());
-					updated = true;
-				}
-				if (!pFoundWidget->Attribute("bgColor")) {
-					pFoundWidget->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
-					updated = true;
-				}
-				if (!pFoundWidget->Attribute("fontName")) {
-					pFoundWidget->SetAttribute("fontName", "");
-					updated = true;
-				}
-				if (!pFoundWidget->Attribute("fontStyle")) {
-					pFoundWidget->SetAttribute("fontStyle", "");
-					updated = true;
-				}
-				if (!pFoundWidget->Attribute("fontSize")) {
-					pFoundWidget->SetAttribute("fontSize", "");
-					updated = true;
-				}
-
-				// move found element to the new container
-				pNewContainer->InsertEndChild(pFoundWidget);
-
-				if (updated) {
-					std::string msg = std::string("+ GlobalStyles: Updated attributes of existing WidgetStyle:'") + sModelName + "'";
-					_consoleWrite(msg);
-				}
-			}
-			else {
-				// else need to clone it from model
+			if (!pFoundWidget) {
+				// need to clone it from model
 				tinyxml2::XMLElement* pClone = pModelNode->DeepClone(pStylerDoc)->ToElement();
 				//		- colors changed to theme defaults if !keepModelColors
 				if (!keepModelColors) {
@@ -496,15 +489,39 @@ void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGloba
 					pClone->SetAttribute("bgColor", _mapStylerDefaultColors["bgColor"].c_str());
 				}
 
-				pNewContainer->InsertEndChild(pClone);
+				pFoundWidget = pClone;
 
 				std::string msg = std::string("+ GlobalStyles: Added missing WidgetStyle:'") + sModelName + "'";
 				_consoleWrite(msg);
 			}
+
+			// make sure only correct attributes exist: add any that were in model but not here; delete any that aren't in the model (because they can confuse N++)
+			bool updated = false;
+			for (auto a : attribs) {
+				// populate any missing attributes
+				if (pModelNode->ToElement()->Attribute(a) && !pFoundWidget->Attribute(a)) {
+					pFoundWidget->SetAttribute(a, pModelNode->ToElement()->Attribute(a));
+					updated = true;
+				}
+				if (!pModelNode->ToElement()->Attribute(a) && pFoundWidget->Attribute(a)) {
+					pFoundWidget->DeleteAttribute(a);
+					updated = true;
+				}
+			}
+			if (updated) {
+				std::string msg = std::string("+ GlobalStyles: Updated attributes for WidgetStyle:'") + sModelName + "'";
+				_consoleWrite(msg);
+			}
+
+			// move found element to the new container
+			pNewContainer->InsertEndChild(pFoundWidget);
 		}
 		// then move to next node
 		pModelNode = pModelNode->NextSibling();
 	}
+
+	// finally, since the newContainer was already added and populated, it is safe to remove the old
+	pElThemeGlobalStyles->Parent()->DeleteChild(pElThemeGlobalStyles);
 
 	_consoleWrite(pStylerDoc);
 }
