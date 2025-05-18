@@ -42,8 +42,12 @@ private:
 	void _addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerStyles, bool keepModelColors);			// clones any missing lexers from model to theme (and fixes attributes)
 	void _addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors);			// clones any styles for a given lexer from model to theme (and fixes attributes)
 	void _addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGlobalStyles, tinyxml2::XMLElement* pElThemeGlobalStyles, bool keepModelColors);	// clones any missing WidgetStyle entries from model to the theme (and fixes attributes)
+	void _sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerStyles);										// Sorts all of the LexerType elements in the LexerStyles container
 
 	bool _isAskRestartCancelled = false;																		// Remember whether CANCEL was chosen when asking to restart while looping through themes
+
+	bool ConfigUpdater::_is_dir_writable(const std::wstring& path);		// checks if a given directory is writeable
+	std::wstring ConfigUpdater::getWritableTempDir(void);				// gets a reasonable directory for a Temp file
 
 	////////////////////////////////
 	// XML Helpers

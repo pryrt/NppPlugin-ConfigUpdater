@@ -22,6 +22,70 @@ std::string wstring_to_utf8(std::wstring& wstr)
 	return str;
 }
 
+bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
+{
+	std::wstring tmpFileName = path;
+	delNull(tmpFileName);
+	tmpFileName += L"\\~$TMPFILE.PRYRT";
+
+	HANDLE hFile = CreateFile(tmpFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		DWORD errNum = GetLastError();
+		if (errNum != ERROR_ACCESS_DENIED) {
+			std::wstring errmsg = L"Error when testing if \"" + path + L"\" is writeable: " + std::to_wstring(GetLastError()) + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
+		}
+		return false;
+	}
+	CloseHandle(hFile);
+	DeleteFile(tmpFileName.c_str());
+	return true;
+}
+
+std::wstring ConfigUpdater::getWritableTempDir(void)
+{
+	// first try the system TEMP
+	std::wstring tempDir(MAX_PATH + 1, L'\0');
+	GetTempPath(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
+	delNull(tempDir);
+
+	// if that fails, try c:\tmp or c:\temp
+	if (!_is_dir_writable(tempDir)) {
+		tempDir = L"c:\\temp";
+		delNull(tempDir);
+	}
+	if (!_is_dir_writable(tempDir)) {
+		tempDir = L"c:\\tmp";
+		delNull(tempDir);
+	}
+
+	// if that fails, try the %USERPROFILE%
+	if (!_is_dir_writable(tempDir)) {
+		tempDir.resize(MAX_PATH + 1);
+		if (!ExpandEnvironmentStrings(L"%USERPROFILE%", const_cast<LPWSTR>(tempDir.data()), MAX_PATH + 1)) {
+			std::wstring errmsg = L"getWritableTempDir::ExpandEnvirontmentStrings(%USERPROFILE%) failed: " + std::to_wstring(GetLastError()) + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
+			return L"";
+		}
+		delNull(tempDir);
+	}
+
+	// last try: current directory
+	if (!_is_dir_writable(tempDir)) {
+		tempDir.resize(MAX_PATH + 1);
+		GetCurrentDirectory(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
+		delNull(tempDir);
+	}
+
+	// if that fails, no other ideas
+	if (!_is_dir_writable(tempDir)) {
+		std::wstring errmsg = L"getWritableTempDir() cannot find any writable directory; please make sure %TEMP% is defined and writable\n";
+		::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
+		return L"";
+	}
+	return tempDir;
+}
+
 // Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the correct scintilla HWND
 HWND ConfigUpdater::_consoleCheck()
 {
@@ -246,18 +310,26 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 	if (pStylerRoot == NULL) _xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc);
 	// TODO: if I need to track the top-level comment, I am hoping that I can test oStylerDoc.FirstChild vs pStylerRoot
 
-	if (isIntermediateSorted) {
-		1;	// TODO: make the unsorted intermediate file; skip that for now.
+	// grab the theme's and model's LexerStyles node for future insertions
+	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+	tinyxml2::XMLElement* pElModelLexerStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+
+	if (isIntermediateSorted)
+	{
+		// Sort the original theme file and save to disk (for easy sort-based comparison of before/after)
+		tinyxml2::XMLDocument oClonedOrig;
+		oStylerDoc.DeepCopy(&oClonedOrig);
+		tinyxml2::XMLElement* pElCloneLexerStyles = oClonedOrig.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+		_sortLexerTypesByName(pElCloneLexerStyles);
+
+		std::string sTmpFile = themePath8 + ".orig.sorted";
+		oClonedOrig.SaveFile(sTmpFile.c_str());
 	}
 
 	// Grab the default attributes from the <GlobalStyles><WidgetStyle name = "Global override" styleID = "0"...>
 	tinyxml2::XMLElement* pDefaultStyle = _get_default_style_element(oStylerDoc);
 	_mapStylerDefaultColors["fgColor"] = pDefaultStyle->Attribute("fgColor");
 	_mapStylerDefaultColors["bgColor"] = pDefaultStyle->Attribute("bgColor");
-
-	// grab the theme's LexerStyles node for future insertions
-	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
-	tinyxml2::XMLElement* pElModelLexerStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
 
 	// want to keep the colors from the .model. when editing stylers.xml, but none of the others
 	bool keepModelColors = (themeName == std::wstring(L"stylers.xml"));
@@ -284,8 +356,8 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 		pElModelLexerType = pElModelLexerType->NextSiblingElement("LexerType");
 	}
 
-	// TODO: sort the LexerType nodes by name (keeping searchResult _last_)
-	1;
+	// sort the LexerType nodes by name (keeping searchResult _last_)
+	_sortLexerTypesByName(pElThemeLexerStyles);
 
 	// Look for missing GlobalStyles::WidgetStyle entries as well
 	tinyxml2::XMLElement* pElThemeGlobalStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
@@ -293,28 +365,39 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 	_addMissingGlobalWidgets(pElModelGlobalStyles, pElThemeGlobalStyles, keepModelColors);
 
 	// Write XML output
-	3;
-
+	oStylerDoc.SaveFile(themePath8.c_str());
 
 	return true;
 }
 
-// private: case-insensitive std::string comparison
-bool _pvt_stringicmp(std::string a, std::string b)
+// private: case-insensitive std::string equality check
+bool _string_insensitive_eq(std::string a, std::string b)
 {
-	std::string a_copy = a;
-	std::string b_copy = b;
+	std::string a_copy = "";
+	std::string b_copy = "";
+
 	// ignore conversion of int to char implicit in the <algorithm>std::transform, which I have no control over
 #pragma warning(push)
 #pragma warning(disable: 4244)
-	auto all_lower = [](std::string s) { std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); }); };
-	//auto tl = [](unsigned char c) { return std::tolower(c); };
-	//std::transform(sAttrRead.begin(), sAttrRead.end(), sAttrRead.begin(), tl);
-	//std::transform(sAttrCmpr.begin(), sAttrCmpr.end(), sAttrCmpr.begin(), tl);
-	all_lower(a_copy);
-	all_lower(b_copy);
+	for (auto i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
+	for (auto i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
 #pragma warning(pop)
 	return a_copy == b_copy;
+}
+
+// private: case-insensitive std::string less-than check
+bool _string_insensitive_lt(std::string a, std::string b)
+{
+	std::string a_copy = "";
+	std::string b_copy = "";
+
+	// ignore conversion of int to char implicit in the <algorithm>std::transform, which I have no control over
+#pragma warning(push)
+#pragma warning(disable: 4244)
+	for (auto i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
+	for (auto i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
+#pragma warning(pop)
+	return a_copy < b_copy;
 }
 
 // look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
@@ -332,7 +415,7 @@ tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2
 		else {
 			const char* cAttrValue = pFoundElement->Attribute(sAttributeName.c_str());
 			if (cAttrValue) {
-				if (_pvt_stringicmp(sAttributeValue, cAttrValue))
+				if (_string_insensitive_eq(sAttributeValue, cAttrValue))
 					return pFoundElement;
 			}
 		}
@@ -522,6 +605,48 @@ void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGloba
 
 	// finally, since the newContainer was already added and populated, it is safe to remove the old
 	pElThemeGlobalStyles->Parent()->DeleteChild(pElThemeGlobalStyles);
+}
 
-	_consoleWrite(pStylerDoc);
+// Sorts all of the LexerType elements in the LexerStyles container
+void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerStyles)
+{
+	// use <algorithm>'s std::sort to sort a std::vector of LexerType elements
+	//	1: populate vector
+	//	2: sort
+	//	3: update LexerStyles container (standard loop through vector, append each to end of container, which will move them as appropriate)
+
+	// populate vector: standard loop over child elements, append to vector
+	std::vector<tinyxml2::XMLElement*> vpElements;
+	tinyxml2::XMLElement* pElLexerType = pElThemeLexerStyles->FirstChildElement("LexerType");
+	if (!pElLexerType) return;	// don't need to sort when there are no LexerType children
+	while (pElLexerType) {
+		vpElements.push_back(pElLexerType);
+		pElLexerType = pElLexerType->NextSiblingElement("LexerType");
+	}
+
+	// sort
+	auto cmpLexerNames = [](tinyxml2::XMLElement* pA, tinyxml2::XMLElement* pB) {
+		// Note: true means A goes before B (A<B)
+
+		// strings to compare
+		std::string sA = pA ? pA->Attribute("name") : "";
+		std::string sB = pB ? pB->Attribute("name") : "";
+
+		// searchResult needs to go last
+		if (sB == "searchResult") return true;
+		if (sA == "searchResult") return false;
+
+		// otherwise, compare case-insensitive by name
+		return _string_insensitive_lt(sA, sB);
+		};
+	std::sort(vpElements.begin(), vpElements.end(), cmpLexerNames);
+
+	// update LexerStyles container: loop through the vector, use InsertEndChild to move that element to end of container
+	for (auto pElToMove: vpElements) {
+		pElThemeLexerStyles->InsertEndChild(pElToMove);
+	}
+
+	std::string msg = std::string("! LexerStyles: Sorted LexerType elements alphabetically (keeping \"searchResults\" at end)");
+	_consoleWrite(msg);
+
 }
