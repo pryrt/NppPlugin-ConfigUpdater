@@ -42,7 +42,7 @@ bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 	return true;
 }
 
-std::wstring ConfigUpdater::getWritableTempDir(void)
+std::wstring ConfigUpdater::_getWritableTempDir(void)
 {
 	// first try the system TEMP
 	std::wstring tempDir(MAX_PATH + 1, L'\0');
@@ -63,7 +63,7 @@ std::wstring ConfigUpdater::getWritableTempDir(void)
 	if (!_is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		if (!ExpandEnvironmentStrings(L"%USERPROFILE%", const_cast<LPWSTR>(tempDir.data()), MAX_PATH + 1)) {
-			std::wstring errmsg = L"getWritableTempDir::ExpandEnvirontmentStrings(%USERPROFILE%) failed: " + std::to_wstring(GetLastError()) + L"\n";
+			std::wstring errmsg = L"_getWritableTempDir::ExpandEnvirontmentStrings(%USERPROFILE%) failed: " + std::to_wstring(GetLastError()) + L"\n";
 			::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
 			return L"";
 		}
@@ -79,7 +79,7 @@ std::wstring ConfigUpdater::getWritableTempDir(void)
 
 	// if that fails, no other ideas
 	if (!_is_dir_writable(tempDir)) {
-		std::wstring errmsg = L"getWritableTempDir() cannot find any writable directory; please make sure %TEMP% is defined and writable\n";
+		std::wstring errmsg = L"_getWritableTempDir() cannot find any writable directory; please make sure %TEMP% is defined and writable\n";
 		::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
 		return L"";
 	}
@@ -201,38 +201,40 @@ void ConfigUpdater::_populateNppDirs(void)
 void ConfigUpdater::go(bool isIntermediateSorted)
 {
 	_initInternalState();
-	_getModelStyler();
 	_updateAllThemes(isIntermediateSorted);
-	if (isIntermediateSorted) return;
+	_updateLangs(isIntermediateSorted);
 	return;
 }
 
-void ConfigUpdater::_getModelStyler(void)
+tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
 {
-	//_stylers_model_xml.oDoc;
-	_stylers_model_xml.fName = std::wstring(MAX_PATH, L'\0');
-	PathCchCombine(const_cast<PWSTR>(_stylers_model_xml.fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
-	delNull(_stylers_model_xml.fName);
-	tinyxml2::XMLError eResult = _stylers_model_xml.oDoc.LoadFile(wstring_to_utf8(_stylers_model_xml.fName).c_str());
-	_xml_check_result(eResult, &_stylers_model_xml.oDoc);
-	_stylers_model_xml.pRoot = _stylers_model_xml.oDoc.RootElement();
-	if (_stylers_model_xml.pRoot == NULL) {
-		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &_stylers_model_xml.oDoc);
+	tinyxml2::XMLDocument* pDoc = new tinyxml2::XMLDocument;
+	std::wstring fName = std::wstring(MAX_PATH, L'\0');
+	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
+	delNull(fName);
+	tinyxml2::XMLError eResult = pDoc->LoadFile(wstring_to_utf8(fName).c_str());
+	_xml_check_result(eResult, pDoc);
+	if (pDoc->RootElement() == NULL) {
+		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, pDoc);
 	}
 
-	auto elDefaultStyle = _get_default_style_element(_stylers_model_xml.oDoc);
+	auto elDefaultStyle = _get_default_style_element(pDoc);
 	_mapModelDefaultColors["fgColor"] = elDefaultStyle->Attribute("fgColor");
 	_mapModelDefaultColors["bgColor"] = elDefaultStyle->Attribute("bgColor");
 
-	return;
+	return pDoc;
 }
 
 // grab the default style element out of the given theme XML
 tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument& oDoc)
 {
+	return _get_default_style_element(&oDoc);
+}
+tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument* pDoc)
+{
 	// tinyxml2 doesn't have XPath, and my attempts at adding on tixml2ex.h's find_element() couldn't seem to ever find any element, even the root
 	//	so switch to manual navigation.
-	tinyxml2::XMLElement* pSearch = oDoc.FirstChildElement("NotepadPlus");
+	tinyxml2::XMLElement* pSearch = pDoc->FirstChildElement("NotepadPlus");
 	if (pSearch) pSearch = pSearch->FirstChildElement("GlobalStyles");
 	if (pSearch) pSearch = pSearch->FirstChildElement("WidgetStyle");
 	while (pSearch) {
@@ -242,7 +244,7 @@ tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDoc
 		pSearch = pSearch->NextSiblingElement();
 	}
 	if (!pSearch) {
-		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDoc);
+		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, pDoc);
 	}
 	return pSearch;
 }
@@ -250,8 +252,9 @@ tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDoc
 // loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
 void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 {
+	tinyxml2::XMLDocument* pModelStylerDoc = _getModelStyler();
 	bool DEBUG = true;
-	_updateOneTheme(_nppCfgDir, L"stylers.xml", isIntermediateSorted);
+	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted);
 	if (DEBUG) return;
 
 	DWORD szNeeded = GetCurrentDirectory(0, NULL);
@@ -269,7 +272,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 				bool stillFound = true;
 				while (stillFound) {
 					// process this file
-					stillFound &= _updateOneTheme(wsDir, infoFound.cFileName, isIntermediateSorted);
+					stillFound &= _updateOneTheme(pModelStylerDoc, wsDir, infoFound.cFileName, isIntermediateSorted);
 
 					// look for next file
 					stillFound &= static_cast<bool>(FindNextFile(fhFound, &infoFound));
@@ -284,7 +287,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 }
 
 // Updates one particular theme or styler file
-bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
+bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
 {
 	// TODO: isWriteable test needs to go in here somewhere:
 	//		when asking, YES=restart, NO=not for this file, CANCEL=stop asking;
@@ -312,7 +315,7 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 
 	// grab the theme's and model's LexerStyles node for future insertions
 	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
-	tinyxml2::XMLElement* pElModelLexerStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+	tinyxml2::XMLElement* pElModelLexerStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
 
 	if (isIntermediateSorted)
 	{
@@ -361,7 +364,7 @@ bool ConfigUpdater::_updateOneTheme(std::wstring themeDir, std::wstring themeNam
 
 	// Look for missing GlobalStyles::WidgetStyle entries as well
 	tinyxml2::XMLElement* pElThemeGlobalStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
-	tinyxml2::XMLElement* pElModelGlobalStyles = _stylers_model_xml.oDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
+	tinyxml2::XMLElement* pElModelGlobalStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
 	_addMissingGlobalWidgets(pElModelGlobalStyles, pElThemeGlobalStyles, keepModelColors);
 
 	// Write XML output
@@ -649,4 +652,12 @@ void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerSty
 	std::string msg = std::string("! LexerStyles: Sorted LexerType elements alphabetically (keeping \"searchResults\" at end)");
 	_consoleWrite(msg);
 
+}
+
+// updates langs.xml to match langs.model.xml
+void ConfigUpdater::_updateLangs(bool /*isIntermediateSorted*/)
+{
+	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
+	std::string sFilenameLangsModel = wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
+	return;
 }
