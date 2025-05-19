@@ -100,7 +100,9 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 void menucall_UpdateConfigFiles()
 {
     static ConfigUpdater oConf(nppData._nppHandle);
-    oConf.go();
+    // TODO: need to determine isIntermediateSorted or not
+    bool isIntermediateSorted = true;
+    oConf.go(isIntermediateSorted);
 }
 
 void menucall_AboutDlg()

@@ -323,7 +323,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 		tinyxml2::XMLDocument oClonedOrig;
 		oStylerDoc.DeepCopy(&oClonedOrig);
 		tinyxml2::XMLElement* pElCloneLexerStyles = oClonedOrig.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
-		_sortLexerTypesByName(pElCloneLexerStyles);
+		_sortLexerTypesByName(pElCloneLexerStyles, isIntermediateSorted);
 
 		std::string sTmpFile = themePath8 + ".orig.sorted";
 		oClonedOrig.SaveFile(sTmpFile.c_str());
@@ -611,7 +611,7 @@ void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGloba
 }
 
 // Sorts all of the LexerType elements in the LexerStyles container
-void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerStyles)
+void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerStyles, bool isIntermediateSorted)
 {
 	// use <algorithm>'s std::sort to sort a std::vector of LexerType elements
 	//	1: populate vector
@@ -645,19 +645,248 @@ void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerSty
 	std::sort(vpElements.begin(), vpElements.end(), cmpLexerNames);
 
 	// update LexerStyles container: loop through the vector, use InsertEndChild to move that element to end of container
-	for (auto pElToMove: vpElements) {
+	for (auto pElToMove : vpElements) {
 		pElThemeLexerStyles->InsertEndChild(pElToMove);
 	}
 
 	std::string msg = std::string("! LexerStyles: Sorted LexerType elements alphabetically (keeping \"searchResults\" at end)");
+	if (isIntermediateSorted) msg += " (for intermediate-sort output file)";
 	_consoleWrite(msg);
+}
 
+// Sorts all of the Language elements in the Languages container
+void ConfigUpdater::_sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, bool isIntermediateSorted)
+{
+	// use <algorithm>'s std::sort to sort a std::vector of Language elements
+	//	1: populate vector
+	//		// modification: need to track comments, mapping the "next" node as key to this comment as value
+	//	2: sort
+	//	3: update LexerStyles container (standard loop through vector, append each to end of container, which will move them as appropriate)
+	//		// modification: also unpack possibly-stacked comments
+
+	// populate vector: standard loop over child elements, append to vector
+	std::vector<tinyxml2::XMLElement*> vpElements;
+	std::map<tinyxml2::XMLNode*, tinyxml2::XMLComment*> mapComments;
+	tinyxml2::XMLNode* pNodeLang = pElLanguages->FirstChild();
+	if (!pNodeLang) return;	// don't need to sort when there are no Language children
+	while (pNodeLang) {
+		if (pNodeLang->ToComment()) {
+			tinyxml2::XMLNode* pNodeNext = pNodeLang->NextSibling();
+			mapComments[pNodeNext] = pNodeLang->ToComment();
+		}
+		else {
+			vpElements.push_back(pNodeLang->ToElement());
+		}
+		pNodeLang = pNodeLang->NextSibling();
+	}
+
+	// sort
+	auto cmpLangNames = [](tinyxml2::XMLElement* pA, tinyxml2::XMLElement* pB) {
+		// Note: true means A goes before B (A<B)
+
+		// strings to compare
+		std::string sA = pA ? pA->Attribute("name") : "";
+		std::string sB = pB ? pB->Attribute("name") : "";
+
+		// "normal" needs to go first
+		if (sB == "normal") return false;
+		if (sA == "normal") return true;
+
+		// "searchResult" needs to go last
+		if (sB == "searchResult") return true;
+		if (sA == "searchResult") return false;
+
+		// otherwise, compare case-insensitive by name
+		return _string_insensitive_lt(sA, sB);
+		};
+	std::sort(vpElements.begin(), vpElements.end(), cmpLangNames);
+
+	// update LexerStyles container: loop through the vector, use InsertEndChild to move that element to end of container
+	for (auto pElToMove : vpElements) {
+		tinyxml2::XMLNode* pIter = pElToMove;
+		pElLanguages->InsertEndChild(pElToMove);
+		tinyxml2::XMLNode* pPrevSib = pElToMove->PreviousSibling();
+		while (mapComments.count(pIter)) {
+			tinyxml2::XMLComment* pComment = mapComments[pIter];
+			// logic: the pElToMove will now have a previous sibling (or will be the first)
+			//		but that's not changing, so it's set outside the WHILE
+			//	if has previous, then add this comment after the sibling
+			if (pPrevSib) {
+				pElLanguages->InsertAfterChild(pPrevSib, pComment);
+			}
+			//	if no previous, then add this comment as the first child of the pElLanguages parent
+			else {
+				pElLanguages->InsertFirstChild(pComment);
+			}
+			// either way, change the iterator to the comment that was just inserted, and see if we need to stack in next loop of WHILE
+			pIter = pComment;
+		}
+	}
+
+	std::string msg = std::string("! Languages: Sorted Language elements alphabetically (keeping \"normal\" at the beginning and \"searchResults\" at end)");
+	if (isIntermediateSorted) msg += " (for intermediate-sort output file)";
+	_consoleWrite(msg);
 }
 
 // updates langs.xml to match langs.model.xml
-void ConfigUpdater::_updateLangs(bool /*isIntermediateSorted*/)
+void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 {
-	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
+	// Prepare the filenames
 	std::string sFilenameLangsModel = wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
+	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
+	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
+
+	// load the active and model documents
+	tinyxml2::XMLDocument oDocLangsModel, oDocLangsActive;
+	tinyxml2::XMLError eResult = oDocLangsModel.LoadFile(sFilenameLangsModel.c_str());
+	_xml_check_result(eResult, &oDocLangsModel);
+	eResult = oDocLangsActive.LoadFile(sFilenameLangsActive.c_str());
+	_xml_check_result(eResult, &oDocLangsActive);
+
+	// get the <Languages> element from each
+	tinyxml2::XMLElement* pElLanguagesModel = oDocLangsModel.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
+	if (!pElLanguagesModel) {
+		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDocLangsModel);
+		return;
+	}
+	tinyxml2::XMLElement* pElLanguagesActive = oDocLangsActive.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
+	if (!pElLanguagesActive) {
+		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDocLangsActive);
+		return;
+	}
+
+	// If requested, Sort the original theme file and save to disk (for easy sort-based comparison of before/after)
+	if (isIntermediateSorted)
+	{
+		tinyxml2::XMLDocument oClonedOrig;
+		oDocLangsActive.DeepCopy(&oClonedOrig);
+		tinyxml2::XMLElement* pElCloneLanguages = oClonedOrig.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
+		_sortLanguagesByName(pElCloneLanguages, isIntermediateSorted);
+
+		std::string sTmpFile = sFilenameLangsActive + ".orig.sorted";
+		oClonedOrig.SaveFile(sTmpFile.c_str());
+	}
+
+	// Loop through model <Languages>, inserting missing data into active <Languages>
+	tinyxml2::XMLElement* pElLangModel = pElLanguagesModel->FirstChildElement("Language");
+	while (pElLangModel) {
+		// get the name of this Model Language
+		std::string sLangName = pElLangModel->Attribute("name");
+		tinyxml2::XMLElement* pSearchLangActive = _find_element_with_attribute_value(pElLanguagesActive, nullptr, "Language", "name", sLangName);
+		if (!pSearchLangActive) {
+			// this <Language> not found in active, so need to clone it from Model
+			tinyxml2::XMLElement* pClone = pElLangModel->DeepClone(&oDocLangsActive)->ToElement();
+
+			// add the clone as a child of the active <Languages> element
+			pSearchLangActive = pElLanguagesActive->InsertEndChild(pClone)->ToElement();
+
+			// inform the user
+			std::string msg = std::string("+ Languages: add missing Language='") + sLangName + "'";
+			_consoleWrite(msg);
+		}
+
+		// loop through all the <Keywords> _and_ comments in the Model
+		tinyxml2::XMLNode* pNodeKeywordModel = pElLangModel->FirstChild();
+		while (pNodeKeywordModel) {
+			bool isComment = pNodeKeywordModel->ToComment();
+			std::string sKeywordName = isComment ? pNodeKeywordModel->Value() : pNodeKeywordModel->ToElement()->Attribute("name");
+			tinyxml2::XMLNode* pSearchKeywordActive = nullptr;
+			if (!isComment) {
+				pSearchKeywordActive = _find_element_with_attribute_value(pSearchLangActive, nullptr, "Keywords", "name", sKeywordName);
+			}
+			else {
+				// search through comments
+				tinyxml2::XMLNode* pNodeCommentSearch = pSearchLangActive->FirstChild();
+				while (pNodeCommentSearch) {
+					if (pNodeCommentSearch->ToComment()) {
+						// if it's a comment, check the value
+						if (sKeywordName == pNodeCommentSearch->ToComment()->Value()) {
+							// found a comment with the same text, so just reuse that one
+							pSearchKeywordActive = pNodeCommentSearch;
+						}
+					}
+					pNodeCommentSearch = pNodeCommentSearch->NextSibling();
+				}
+			}
+			if (!pSearchKeywordActive) {
+				// this <Keywords> not found in Active, so need to clone from Model
+				tinyxml2::XMLNode* pCloneKw = pNodeKeywordModel->DeepClone(&oDocLangsActive);
+
+				// add the clone as a child of the active <Language> element
+				pSearchKeywordActive = pSearchLangActive->InsertEndChild(pCloneKw);
+
+				// inform the user
+				std::string msg = std::string("+ Language '") + sLangName + "': add missing " + (pSearchKeywordActive->ToComment() ? "Comment = " : "Keywords group:") + "'" + sKeywordName + "'";
+				_consoleWrite(msg);
+			}
+			else {
+				// it was found, so just move it
+				pSearchLangActive->InsertEndChild(pSearchKeywordActive);
+			}
+
+			// for <Keyword> elements (not comments), dig into the actual data to see if any terms are missing
+			if (pSearchKeywordActive->ToElement()) {
+				// first, populate the active keywords
+				std::vector<std::string> vActiveKeywords;
+				std::map<std::string, bool> mActiveKeywords;
+				const char* cstr = pSearchKeywordActive->ToElement()->GetText();
+				if (cstr) {
+					std::string token, sKeywordsText = cstr;
+					std::istringstream ss(sKeywordsText);
+					while (ss >> token) {
+						vActiveKeywords.push_back(token);
+						mActiveKeywords[token] = true;
+					}
+				}
+
+				// now, for each keyword in the model, test if it's already in the active list; if not, add it
+				cstr = pNodeKeywordModel->ToElement()->GetText();
+				if (cstr) {
+					std::string token, sKeywordsText = cstr;
+					std::istringstream ss(sKeywordsText);
+					size_t nAdded = 0;
+					std::string sAdded = "";
+					while (ss >> token) {
+						if (!mActiveKeywords.count(token) && token.size()) {
+							vActiveKeywords.push_back(token);
+							mActiveKeywords[token] = true;
+							sAdded += (nAdded ? " " : "" ) + token;
+							++nAdded;
+						}
+					}
+					if (nAdded) {
+						std::string msg = std::string("+ Language '") + sLangName + "' group:'" + sKeywordName + "': add " + std::to_string(nAdded) + " keywords: " + sAdded;
+						_consoleWrite(msg);
+					}
+				}
+
+				// now sort the active keywords in normal case-sensitive alphabetical order
+				std::sort(vActiveKeywords.begin(), vActiveKeywords.end());
+
+				// join the list together into an updated string of keywords
+				std::string sUpdatedKeywords = "";
+				bool first = true;
+				for (auto sKw : vActiveKeywords) {
+					if (!first) sUpdatedKeywords += " ";
+					sUpdatedKeywords += sKw;
+					first = false;
+				}
+
+				// TODO: if it's longer than 8000 characters, see if I can split it up
+				//		(indenting each extra line by 16 spaces)
+
+				pSearchKeywordActive->ToElement()->SetText(sUpdatedKeywords.c_str());
+			}
+
+			// move to next <Keywords> or comment
+			pNodeKeywordModel = pNodeKeywordModel->NextSibling();
+		}
+
+		// then move to next <Language>
+		pElLangModel = pElLangModel->NextSiblingElement("Language");
+	}
+
+	_consoleWrite(pElLanguagesActive);
+
 	return;
 }
