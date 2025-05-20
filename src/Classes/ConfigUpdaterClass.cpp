@@ -382,8 +382,8 @@ bool _string_insensitive_eq(std::string a, std::string b)
 	// ignore conversion of int to char implicit in the <algorithm>std::transform, which I have no control over
 #pragma warning(push)
 #pragma warning(disable: 4244)
-	for (auto i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
-	for (auto i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
+	for (size_t i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
+	for (size_t i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
 #pragma warning(pop)
 	return a_copy == b_copy;
 }
@@ -397,8 +397,8 @@ bool _string_insensitive_lt(std::string a, std::string b)
 	// ignore conversion of int to char implicit in the <algorithm>std::transform, which I have no control over
 #pragma warning(push)
 #pragma warning(disable: 4244)
-	for (auto i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
-	for (auto i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
+	for (size_t i = 0; i < a.size(); i++) { a_copy += std::tolower(a[i]); }
+	for (size_t i = 0; i < b.size(); i++) { b_copy += std::tolower(b[i]); }
 #pragma warning(pop)
 	return a_copy < b_copy;
 }
