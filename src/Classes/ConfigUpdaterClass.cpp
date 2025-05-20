@@ -47,7 +47,7 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 {
 	if (_is_dir_writable(path)) return true;
 	if (_isAskRestartCancelled) {
-		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
+		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
 		return false;	// don't need to ask if already cancelled
 	}
 	std::wstring msg = path + L" is not writable. Would you like to restart with UAC?\n\n"
@@ -57,25 +57,24 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 	int res = ::MessageBox(_hwndNPP, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
 	switch (res) {
 	case IDNO:
-		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Do not prompt for UAC.");
+		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC.");
 		_isAskRestartCancelled = false;
 		break;
 	case IDCANCEL:
-		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
+		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
 		_isAskRestartCancelled = true;
 		break;
 	case IDYES:
-		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Will prompt for UAC.");
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
 		_isAskRestartCancelled = false;
 		// TODO: prompt for UAC
 		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
 		std::wstring wsArgs(szLen + 1, '\0');
 		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
 		if (!szGot) wsArgs = L"";
-		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 10 & \"") + _nppExePath + L"\" " + wsArgs;
-		::MessageBox(_hwndNPP, (std::wstring(L"cmd.exe ") + wsRun).c_str(), L"Title", MB_OK);
-		ShellExecute(0, NULL/*L"runas"*/, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+		ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 		break;
 	}
@@ -300,6 +299,7 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_initInternalState();
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
+	_consoleWrite(L"--- ConfigUpdater done. ---");
 	return;
 }
 
