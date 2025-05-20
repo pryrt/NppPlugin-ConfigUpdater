@@ -45,7 +45,7 @@ bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 // tests if writable, and asks for UAC if not; returns true only when writable
 bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 {
-	//if (_is_dir_writable(path)) return true;
+	if (_is_dir_writable(path)) return true;
 	if (_isAskRestartCancelled) {
 		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
 		return false;	// don't need to ask if already cancelled
@@ -75,7 +75,6 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 10 & \"") + _nppExePath + L"\" " + wsArgs;
 		::MessageBox(_hwndNPP, (std::wstring(L"cmd.exe ") + wsRun).c_str(), L"Title", MB_OK);
 		ShellExecute(0, NULL/*L"runas"*/, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
-		::SendMessage(_consoleCheck(), SCI_SETSAVEPOINT, 0, 0);
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 		break;
@@ -128,16 +127,44 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 }
 
 // Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the correct scintilla HWND
-HWND ConfigUpdater::_consoleCheck()
+//		Consumer is required to CloseHandle() when done writing
+HANDLE ConfigUpdater::_consoleCheck()
 {
+	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigDir + L"\\ConfigUpdater.log";
+
+	// whether the file exists or not, need to open it for Append
+	HANDLE hConsoleFile = CreateFile(
+		wsConsoleFilePath.c_str(),					// name
+		FILE_APPEND_DATA | FILE_GENERIC_READ,		// appending and locking
+		FILE_SHARE_READ,							// allows multiple readers
+		0,											// no security
+		OPEN_ALWAYS,								// append or create
+		FILE_ATTRIBUTE_NORMAL,						// normal file
+		NULL);										// no attr template
+	if (hConsoleFile == INVALID_HANDLE_VALUE) {
+		std::wstring errmsg = L"Error when trying to create/append \"" + wsConsoleFilePath + L"\": " + std::to_wstring(GetLastError()) + L"\n";
+		::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
+		return nullptr;
+	}
+
+	// check if the file is already open (so bufferID has been stored)
 	LRESULT res = _uOutBufferID ? ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0) : -1;
 	if (res == -1) {
-		// creates it if necessary
-		wchar_t wcTabName[] = L"ConfigUpdater.log";
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_NEW);
+		// file should exist now, because of CreateFile, so need to open it
+		LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
+		if (!status) {
+			CloseHandle(hConsoleFile);
+			return nullptr;
+		}
+
+		// save the bufferID for future use
 		_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
-		::SendMessage(_hwndNPP, NPPM_SETUNTITLEDNAME, static_cast<WPARAM>(_uOutBufferID), reinterpret_cast<LPARAM>(wcTabName));
+
+		// make sure it's in ERRORLIST mode, and Monitoring (tail -f) mode
 		::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
+
+		// find its position
 		res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
 	}
 
@@ -149,7 +176,7 @@ HWND ConfigUpdater::_consoleCheck()
 	::SendMessage(_hwndNPP, NPPM_ACTIVATEDOC, view, index);
 
 	// return the correct scintilla HWND
-	return view ? nppData._scintillaSecondHandle : nppData._scintillaMainHandle;
+	return hConsoleFile;
 }
 
 // Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change/error, "^--- "=message
@@ -170,8 +197,16 @@ void ConfigUpdater::_consoleWrite(LPCWSTR wcStr)
 }
 void ConfigUpdater::_consoleWrite(LPCSTR cStr)
 {
-	HWND hEditor = _consoleCheck();
-	::SendMessageA(hEditor, SCI_ADDTEXT, static_cast<WPARAM>(strlen(cStr)), reinterpret_cast<LPARAM>(cStr));
+	HANDLE hConsoleFile = _consoleCheck();
+	if (!hConsoleFile) return;
+
+	DWORD dwNBytesWritten = 0;
+	BOOL bWriteOK = ::WriteFile(hConsoleFile, cStr, static_cast<DWORD>(strlen(cStr)), &dwNBytesWritten, NULL);
+	if (!bWriteOK) {
+		std::wstring msg = std::wstring(L"Problem writing to ConfigUpdater.log: ") + std::to_wstring(GetLastError());
+		::MessageBox(_hwndNPP, msg.c_str(), L"Logging Error", MB_ICONWARNING);
+	}
+	CloseHandle(hConsoleFile);
 }
 void ConfigUpdater::_consoleWrite(tinyxml2::XMLNode* pNode)
 {
@@ -203,6 +238,7 @@ void ConfigUpdater::_populateNppDirs(void)
 	std::wstring pluginCfgDir(sz, '\0');
 	::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, sz, reinterpret_cast<LPARAM>(pluginCfgDir.data()));
 	delNull(pluginCfgDir);
+	_nppCfgPluginConfigDir = pluginCfgDir;
 
 	// %AppData%\Notepad++\Plugins or equiv
 	//		since it's removing the tail, it will never be longer than pluginCfgDir; since it's in-place, initialize with the first
@@ -249,11 +285,21 @@ void ConfigUpdater::_populateNppDirs(void)
 
 void ConfigUpdater::go(bool isIntermediateSorted)
 {
+	{
+		SYSTEMTIME st;
+		GetLocalTime(&st);
+
+		wchar_t date_str[256], time_str[256];
+
+		GetDateFormat(LOCALE_USER_DEFAULT, DATE_LONGDATE, &st, nullptr, date_str, 256);
+		GetTimeFormat(LOCALE_USER_DEFAULT, 0, &st, nullptr, time_str, 256);
+
+		_consoleWrite(std::wstring(L"--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---"));
+		_consoleWrite(std::wstring(L"--- ConfigUpdater run at ") + std::wstring(date_str) + L" " + std::wstring(time_str));
+	}
 	_initInternalState();
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
-	// mark the ConfigUpdater.log as "saved", even though it hasn't been
-	::SendMessageA(_consoleCheck(), SCI_SETSAVEPOINT, 0, 0);
 	return;
 }
 
@@ -703,7 +749,7 @@ void ConfigUpdater::_sortLexerTypesByName(tinyxml2::XMLElement* pElThemeLexerSty
 		pElThemeLexerStyles->InsertEndChild(pElToMove);
 	}
 
-	std::string msg = std::string("! LexerStyles: Sorted LexerType elements alphabetically (keeping \"searchResults\" at end)");
+	std::string msg = std::string("+ LexerStyles: Sorted LexerType elements alphabetically (keeping \"searchResults\" at end)");
 	if (isIntermediateSorted) msg += " (for intermediate-sort output file)";
 	_consoleWrite(msg);
 }
@@ -777,7 +823,7 @@ void ConfigUpdater::_sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, boo
 		}
 	}
 
-	std::string msg = std::string("! Languages: Sorted Language elements alphabetically (keeping \"normal\" at the beginning and \"searchResults\" at end)");
+	std::string msg = std::string("+ Languages: Sorted Language elements alphabetically (keeping \"normal\" at the beginning and \"searchResults\" at end)");
 	if (isIntermediateSorted) msg += " (for intermediate-sort output file)";
 	_consoleWrite(msg);
 }
