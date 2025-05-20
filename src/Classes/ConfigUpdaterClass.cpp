@@ -882,9 +882,6 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 					first = false;
 				}
 
-				// TODO: if it's longer than 8000 characters, see if I can split it up
-				//		(indenting each extra line by 16 spaces)
-
 				pSearchKeywordActive->ToElement()->SetText(sUpdatedKeywords.c_str());
 			}
 
@@ -895,6 +892,12 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 		// then move to next <Language>
 		pElLangModel = pElLangModel->NextSiblingElement("Language");
 	}
+
+	// Once done, sort the languages
+	_sortLanguagesByName(pElLanguagesActive);
+
+	// save
+	oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
 
 	_consoleWrite(pElLanguagesActive);
 
