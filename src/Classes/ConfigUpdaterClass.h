@@ -49,19 +49,20 @@ private:
 
 	bool _isAskRestartCancelled = false;																											// Remember whether CANCEL was chosen when asking to restart while looping through themes
 
-	bool ConfigUpdater::_is_dir_writable(const std::wstring& path);																					// checks if a given directory is writeable
-	std::wstring ConfigUpdater::_getWritableTempDir(void);																							// gets a reasonable directory for a Temp file
+	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
+	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
+	bool _ask_dir_permissions(const std::wstring& path);																							// tests if writable, and asks for UAC if not
 
 	////////////////////////////////
 	// XML Helpers
 	////////////////////////////////
 
 	// grab the default style element out of the given theme XML
-	tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument& oDoc);
-	tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDocument* pDoc);
+	tinyxml2::XMLElement* _get_default_style_element(tinyxml2::XMLDocument& oDoc);
+	tinyxml2::XMLElement* _get_default_style_element(tinyxml2::XMLDocument* pDoc);
 
 	// look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
-	tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue, bool caseSensitive=true);
+	tinyxml2::XMLElement* _find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue, bool caseSensitive=true);
 
 	tinyxml2::XMLError _xml_check_result(tinyxml2::XMLError a_eResult, tinyxml2::XMLDocument* p_doc = NULL)
 	{
@@ -81,6 +82,7 @@ private:
 	std::wstring
 		_nppAppDir,
 		_nppAppThemesDir,
+		_nppExePath,
 		_nppCfgDir,
 		_nppCfgUdlDir,
 		_nppCfgFunctionListDir,

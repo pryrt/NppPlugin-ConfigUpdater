@@ -42,6 +42,47 @@ bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 	return true;
 }
 
+// tests if writable, and asks for UAC if not; returns true only when writable
+bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
+{
+	//if (_is_dir_writable(path)) return true;
+	if (_isAskRestartCancelled) {
+		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
+		return false;	// don't need to ask if already cancelled
+	}
+	std::wstring msg = path + L" is not writable. Would you like to restart with UAC?\n\n"
+		+ L"- YES = Exit Notepad++, ask for UAC permission, and restart.\n"
+		+ L"- NO = Do not exit Notepad++ for now, but ask again if permissions still needed.\n"
+		+ L"- CANCEL = Do not exit Notepad++ for now, and don't ask me again.\n";
+	int res = ::MessageBox(_hwndNPP, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
+	switch (res) {
+	case IDNO:
+		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Do not prompt for UAC.");
+		_isAskRestartCancelled = false;
+		break;
+	case IDCANCEL:
+		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
+		_isAskRestartCancelled = true;
+		break;
+	case IDYES:
+		_consoleWrite(std::wstring(L"--- Directory '") + path + L"' not writable.  Will prompt for UAC.");
+		_isAskRestartCancelled = false;
+		// TODO: prompt for UAC
+		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+		std::wstring wsArgs(szLen + 1, '\0');
+		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+		if (!szGot) wsArgs = L"";
+		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 10 & \"") + _nppExePath + L"\" " + wsArgs;
+		::MessageBox(_hwndNPP, (std::wstring(L"cmd.exe ") + wsRun).c_str(), L"Title", MB_OK);
+		ShellExecute(0, NULL/*L"runas"*/, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
+		::SendMessage(_consoleCheck(), SCI_SETSAVEPOINT, 0, 0);
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+		break;
+	}
+	return false;
+}
+
 std::wstring ConfigUpdater::_getWritableTempDir(void)
 {
 	// first try the system TEMP
@@ -195,6 +236,14 @@ void ConfigUpdater::_populateNppDirs(void)
 	_nppAppDir = exeDir;
 	_nppAppThemesDir = _nppAppDir + L"\\themes";
 
+	// executable path:
+	std::wstring exePath(MAX_PATH, '\0');
+	LRESULT szExe = ::SendMessage(_hwndNPP, NPPM_GETNPPFULLFILEPATH, 0, reinterpret_cast<LPARAM>(exePath.data()));
+	if (szExe) {
+		delNull(exePath);
+		_nppExePath = exePath;
+	}
+
 	return;
 }
 
@@ -203,6 +252,8 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_initInternalState();
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
+	// mark the ConfigUpdater.log as "saved", even though it hasn't been
+	::SendMessageA(_consoleCheck(), SCI_SETSAVEPOINT, 0, 0);
 	return;
 }
 
@@ -299,6 +350,9 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	std::wstring themePath = themeDir + L"\\" + themeName;
 	std::string themePath8 = wstring_to_utf8(themePath);
 	_consoleWrite(std::wstring(L"--- Checking Styler/Theme File: '") + themePath + L"'");
+
+	// check for permissions, exit function if cannot write
+	if(!_ask_dir_permissions(themeDir)) return false;
 
 	// I don't know yet whether tinyxml2 has the TopLevelComment problem that py::xml.etree has.  I will have to watch out for that
 	// remove comment from previous call of update_stylers(), otherwise no-comment myTheme.xml would inherit comment from commented MossyLawn.xml (from .py:2024-Aug-29 bugfix)
@@ -736,6 +790,9 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
 
+	// check for permissions, exit function if cannot write
+	if(!_ask_dir_permissions(_nppCfgDir)) return;
+
 	// load the active and model documents
 	tinyxml2::XMLDocument oDocLangsModel, oDocLangsActive;
 	tinyxml2::XMLError eResult = oDocLangsModel.LoadFile(sFilenameLangsModel.c_str());
@@ -898,8 +955,6 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 	// save
 	oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
-
-	_consoleWrite(pElLanguagesActive);
 
 	return;
 }
