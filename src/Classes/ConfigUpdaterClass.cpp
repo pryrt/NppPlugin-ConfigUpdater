@@ -864,11 +864,21 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 				std::sort(vActiveKeywords.begin(), vActiveKeywords.end());
 
 				// join the list together into an updated string of keywords
+				//		track the length of each "line" of text: if the new keyword would cause it to go beyond 8k, start a new line
 				std::string sUpdatedKeywords = "";
+				size_t lineLength=0, maxLineLength = 8000;
 				bool first = true;
 				for (auto sKw : vActiveKeywords) {
-					if (!first) sUpdatedKeywords += " ";
+					if (!first) {
+						sUpdatedKeywords += " ";
+						lineLength += 1;
+					}
+					if (lineLength + sKw.size() >= maxLineLength) {
+						lineLength = 0;
+						sUpdatedKeywords += "\n                ";
+					}
 					sUpdatedKeywords += sKw;
+					lineLength += sKw.size();
 					first = false;
 				}
 
