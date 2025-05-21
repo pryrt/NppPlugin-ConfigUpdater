@@ -50,10 +50,11 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
 		return false;	// don't need to ask if already cancelled
 	}
-	std::wstring msg = path + L" is not writable. Would you like to restart with UAC?\n\n"
+	std::wstring msg = path + L" is not writable. Would you like to restart Notpead++ with UAC?\n\n"
 		+ L"- YES = Exit Notepad++, ask for UAC permission, and restart.\n"
 		+ L"- NO = Do not exit Notepad++ for now, but ask again if permissions still needed.\n"
-		+ L"- CANCEL = Do not exit Notepad++ for now, and don't ask me again.\n";
+		+ L"- CANCEL = Do not exit Notepad++ for now, and don't ask me again.\n\n"
+		+ L"(don't forget to rerun Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts.";
 	int res = ::MessageBox(_hwndNPP, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
 	switch (res) {
 	case IDNO:
@@ -67,6 +68,7 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 	case IDYES:
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
+		_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
 		_isAskRestartCancelled = false;
 		// TODO: prompt for UAC
 		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
@@ -350,9 +352,7 @@ tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDoc
 void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 {
 	tinyxml2::XMLDocument* pModelStylerDoc = _getModelStyler();
-	bool DEBUG = true;
 	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted);
-	if (DEBUG) return;
 
 	DWORD szNeeded = GetCurrentDirectory(0, NULL);
 	std::wstring curDir(szNeeded, L'\0');
