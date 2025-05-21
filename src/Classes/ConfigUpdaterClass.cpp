@@ -135,11 +135,18 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		STARTUPINFOEX siex = {};
 		siex.lpAttributeList = p;
 		siex.StartupInfo.cb = sizeof(siex);
+		siex.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+		siex.StartupInfo.wShowWindow = SW_MINIMIZE;
 		PROCESS_INFORMATION pi;
 
-		CreateProcessW(cmd, cmd, nullptr, nullptr, FALSE,
-			CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT,
-			nullptr, nullptr, &siex.StartupInfo, &pi);
+		std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
+
+		CreateProcess(
+			cmd, const_cast<LPWSTR>(wsFullCommandLine.c_str()),
+			nullptr, nullptr, FALSE,
+			EXTENDED_STARTUPINFO_PRESENT,
+			nullptr, nullptr,
+			&siex.StartupInfo, &pi);
 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
@@ -427,6 +434,7 @@ void ConfigUpdater::_populateNppDirs(void)
 
 void ConfigUpdater::go(bool isIntermediateSorted)
 {
+#if 0
 	{
 		SYSTEMTIME st;
 		GetLocalTime(&st);
@@ -443,7 +451,9 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
 	_consoleWrite(L"--- ConfigUpdater done. ---");
+#endif
 	_ask_rerun_normal();
+	if (isIntermediateSorted) return;
 	return;
 }
 
