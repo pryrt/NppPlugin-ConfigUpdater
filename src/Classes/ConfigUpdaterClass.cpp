@@ -75,8 +75,8 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		std::wstring wsArgs(szLen + 1, '\0');
 		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
 		if (!szGot) wsArgs = L"";
-		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
-		ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
+		std::wstring wsRun = std::wstring(L"/C ECHO Wait 5sec while old N++ closes & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+		ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWDEFAULT);	/* SW_SHOWMINIMIZED */
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 		break;
 	}
@@ -107,13 +107,11 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		std::wstring wsArgs(szLen + 1, '\0');
 		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
 		if (!szGot) wsArgs = L"";
-		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+		std::wstring wsRun = std::wstring(L"/C echo Wait 5sec while old N++ exits. & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
 
 		// cannot use ShellExecute, because it doesn't de-elevate :-(
 		//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
-		// Try AI-suggested method to get new user token, then CreateProcessAsUser with that token
 
-#if 1
 		// try the method suggested here: <https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443>
 		HWND hwnd = GetShellWindow();
 
@@ -135,8 +133,8 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		STARTUPINFOEX siex = {};
 		siex.lpAttributeList = p;
 		siex.StartupInfo.cb = sizeof(siex);
-		siex.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
-		siex.StartupInfo.wShowWindow = SW_MINIMIZE;
+		//siex.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+		//siex.StartupInfo.wShowWindow = SW_MINIMIZE;
 		PROCESS_INFORMATION pi;
 
 		std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
@@ -152,75 +150,6 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		CloseHandle(pi.hThread);
 		delete[](char*)p;
 		CloseHandle(process);
-
-#else
-		// get non-elevated user token (I hope)
-		HWND hShellWnd = GetShellWindow();
-		if (!hShellWnd) {
-			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
-			return;
-		}
-		DWORD processId;
-		GetWindowThreadProcessId(hShellWnd, &processId);
-		if (!processId) {
-			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
-			return;
-		}
-		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, processId);
-		if (!hProcess) {
-			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
-			return;
-		}
-		HANDLE hNormalToken = nullptr;
-		bool bTokenStatus = OpenProcessToken(hProcess, TOKEN_DUPLICATE | TOKEN_IMPERSONATE | TOKEN_ASSIGN_PRIMARY | TOKEN_QUERY, &hNormalToken);
-		CloseHandle(hProcess);
-		if (!bTokenStatus) {
-			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
-			return;
-		}
-		// At this point, hNormalToken should be a valid user
-		
-		// Now create the new process with that token
-		std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
-		STARTUPINFO si;
-		PROCESS_INFORMATION pi;
-		ZeroMemory(&si, sizeof(si));
-		si.cb = sizeof(si);
-		ZeroMemory(&pi, sizeof(pi));
-		if (
-			CreateProcessAsUser(
-				hNormalToken,									// normal user token
-				NULL,											// optional applicationName
-				const_cast<LPWSTR>(wsFullCommandLine.c_str()),	// app + args
-				//const_cast<LPWSTR>(L"C:\\Windows\\system32\\cmd.exe /k echo works"),
-				NULL,											// process att
-				NULL,											// thread att
-				TRUE,											// inherit handles
-				0,												// creation flags
-				NULL,											// environment
-				NULL,											// current directory
-				&si,											// startup info
-				&pi												// process info
-			)) {
-			CloseHandle(pi.hProcess);
-			CloseHandle(pi.hThread);
-			::MessageBox(_hwndNPP, L"Created", L"Created", MB_OK);
-		}
-		else {
-			LPWSTR messageBuffer = nullptr;
-			FormatMessage(
-				FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-				nullptr,
-				GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				(LPWSTR)&messageBuffer,
-				0,
-				nullptr
-			);
-			::MessageBox(_hwndNPP, messageBuffer, L"Not Created", MB_OK);
-		}
-		CloseHandle(hNormalToken);
-#endif
 
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 		break;
@@ -434,7 +363,6 @@ void ConfigUpdater::_populateNppDirs(void)
 
 void ConfigUpdater::go(bool isIntermediateSorted)
 {
-#if 0
 	{
 		SYSTEMTIME st;
 		GetLocalTime(&st);
@@ -451,9 +379,7 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
 	_consoleWrite(L"--- ConfigUpdater done. ---");
-#endif
 	_ask_rerun_normal();
-	if (isIntermediateSorted) return;
 	return;
 }
 
