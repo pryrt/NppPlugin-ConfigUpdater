@@ -53,6 +53,7 @@ private:
 	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
 	bool _ask_dir_permissions(const std::wstring& path);																							// tests if writable, and asks for UAC if not
+	void _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally
 
 	////////////////////////////////
 	// XML Helpers

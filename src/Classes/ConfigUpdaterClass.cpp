@@ -70,7 +70,7 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
 		_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
 		_isAskRestartCancelled = false;
-		// TODO: prompt for UAC
+		// prompt for UAC
 		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
 		std::wstring wsArgs(szLen + 1, '\0');
 		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
@@ -81,6 +81,112 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		break;
 	}
 	return false;
+}
+
+void ConfigUpdater::_ask_rerun_normal(void)
+{
+	HANDLE hToken = nullptr;
+	TOKEN_ELEVATION elevation;
+	DWORD dwSize;
+
+	// check for elevated
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return;		// if i cannot open token, no way to find out if elevated
+	bool bGotInfo = GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize); 
+	CloseHandle(hToken);
+	if (!bGotInfo) return;					// if i cannot get the info, no way to find out if elevated
+	if (!elevation.TokenIsElevated) return;	// not elevated, so no need to prompt the user
+	int res = ::MessageBox(
+		_hwndNPP,
+		L"You are running as Administrator, with elevated UAC permission.\n\nWould you like to restart Notepad++ as a normal user?",
+		L"Restart Notpead++ Normally?",
+		MB_YESNO);
+	switch (res) {
+	case IDYES: {
+		// derive new command line string
+		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+		std::wstring wsArgs(szLen + 1, '\0');
+		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+		if (!szGot) wsArgs = L"";
+		std::wstring wsRun = std::wstring(L"/C TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+
+		// cannot use ShellExecute, because it doesn't de-elevate :-(
+		//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
+		// Try AI-suggested method to get new user token, then CreateProcessAsUser with that token
+
+		// get non-elevated user token (I hope)
+		HWND hShellWnd = GetShellWindow();
+		if (!hShellWnd) {
+			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
+			return;
+		}
+		DWORD processId;
+		GetWindowThreadProcessId(hShellWnd, &processId);
+		if (!processId) {
+			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
+			return;
+		}
+		HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, processId);
+		if (!hProcess) {
+			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
+			return;
+		}
+		HANDLE hNormalToken = nullptr;
+		bool bTokenStatus = OpenProcessToken(hProcess, TOKEN_DUPLICATE | TOKEN_IMPERSONATE | TOKEN_ASSIGN_PRIMARY | TOKEN_QUERY, &hNormalToken);
+		CloseHandle(hProcess);
+		if (!bTokenStatus) {
+			::MessageBox(_hwndNPP, L"Sorry, could not figure out how to de-elevate", L"Error: De-Elevate", MB_ICONWARNING);
+			return;
+		}
+		// At this point, hNormalToken should be a valid user
+		
+		// Now create the new process with that token
+		std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
+		STARTUPINFO si;
+		PROCESS_INFORMATION pi;
+		ZeroMemory(&si, sizeof(si));
+		si.cb = sizeof(si);
+		ZeroMemory(&pi, sizeof(pi));
+		if (
+			CreateProcessAsUser(
+				hNormalToken,									// normal user token
+				NULL,											// optional applicationName
+				const_cast<LPWSTR>(wsFullCommandLine.c_str()),	// app + args
+				//const_cast<LPWSTR>(L"C:\\Windows\\system32\\cmd.exe /k echo works"),
+				NULL,											// process att
+				NULL,											// thread att
+				TRUE,											// inherit handles
+				0,												// creation flags
+				NULL,											// environment
+				NULL,											// current directory
+				&si,											// startup info
+				&pi												// process info
+			)) {
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+			::MessageBox(_hwndNPP, L"Created", L"Created", MB_OK);
+		}
+		else {
+			LPWSTR messageBuffer = nullptr;
+			FormatMessage(
+				FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+				nullptr,
+				GetLastError(),
+				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				(LPWSTR)&messageBuffer,
+				0,
+				nullptr
+			);
+			::MessageBox(_hwndNPP, messageBuffer, L"Not Created", MB_OK);
+		}
+		CloseHandle(hNormalToken);
+
+		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+		break;
+	}
+	case IDNO:
+		break;
+	}
+
 }
 
 std::wstring ConfigUpdater::_getWritableTempDir(void)
@@ -302,6 +408,7 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_updateAllThemes(isIntermediateSorted);
 	_updateLangs(isIntermediateSorted);
 	_consoleWrite(L"--- ConfigUpdater done. ---");
+	_ask_rerun_normal();
 	return;
 }
 
