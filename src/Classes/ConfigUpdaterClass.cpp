@@ -113,6 +113,40 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
 		// Try AI-suggested method to get new user token, then CreateProcessAsUser with that token
 
+#if 1
+		// try the method suggested here: <https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443>
+		HWND hwnd = GetShellWindow();
+
+		DWORD pid;
+		GetWindowThreadProcessId(hwnd, &pid);
+		HANDLE process = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
+
+		SIZE_T size;
+		InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+		auto p = (PPROC_THREAD_ATTRIBUTE_LIST)new char[size];
+
+		InitializeProcThreadAttributeList(p, 1, 0, &size);
+		UpdateProcThreadAttribute(p, 0,
+			PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+			&process, sizeof(process),
+			nullptr, nullptr);
+
+		wchar_t cmd[] = L"C:\\Windows\\System32\\cmd.exe";
+		STARTUPINFOEX siex = {};
+		siex.lpAttributeList = p;
+		siex.StartupInfo.cb = sizeof(siex);
+		PROCESS_INFORMATION pi;
+
+		CreateProcessW(cmd, cmd, nullptr, nullptr, FALSE,
+			CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT,
+			nullptr, nullptr, &siex.StartupInfo, &pi);
+
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+		delete[](char*)p;
+		CloseHandle(process);
+
+#else
 		// get non-elevated user token (I hope)
 		HWND hShellWnd = GetShellWindow();
 		if (!hShellWnd) {
@@ -179,6 +213,7 @@ void ConfigUpdater::_ask_rerun_normal(void)
 			::MessageBox(_hwndNPP, messageBuffer, L"Not Created", MB_OK);
 		}
 		CloseHandle(hNormalToken);
+#endif
 
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 		break;
