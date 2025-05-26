@@ -108,8 +108,8 @@ void menucall_UpdateConfigFiles()
     // non-modal allows to still interact with the parent
     CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_STATUS_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUStatusProc, (LPARAM)NULL);
 
-    // TODO: need to determine isIntermediateSorted or not
-    bool isIntermediateSorted = true;
+    // isIntermediateSorted will be overridden by settings later in the flow
+    bool isIntermediateSorted = false;
     oConf.go(isIntermediateSorted);
 }
 

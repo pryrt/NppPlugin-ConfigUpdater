@@ -309,6 +309,7 @@ ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 	_hwndNPP = hwndNpp;
 	_populateNppDirs();
 	_initInternalState();
+	_createPluginSettingsIfNeeded();
 };
 
 void ConfigUpdater::_initInternalState(void)
@@ -318,6 +319,56 @@ void ConfigUpdater::_initInternalState(void)
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
 	_mapModelDefaultColors["fgColor"] = "";
 	_mapModelDefaultColors["bgColor"] = "";
+}
+
+// creates the plugin's config file if it dooesn't exist
+void ConfigUpdater::_createPluginSettingsIfNeeded(void)
+{
+	std::wstring wsPluginConfigFile = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
+	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
+
+	// create new file if it doesn't exist
+	if (!PathFileExists(wsPluginConfigFile.c_str())) {
+		tinyxml2::XMLDocument wDoc;
+		tinyxml2::XMLElement* pRoot = wDoc.NewElement("ConfigUpdaterSettings");
+		wDoc.InsertFirstChild(pRoot);
+
+		tinyxml2::XMLElement* pSetting = pRoot->InsertNewChildElement("Setting");
+		pSetting->SetAttribute("name", "DEBUG");
+		pSetting->SetAttribute("isIntermediateSorted", 0);
+
+		wDoc.SaveFile(sPluginConfigFile8.c_str());
+	}
+
+}
+
+// reads the plugin's config file
+void ConfigUpdater::_readPluginSettings(void)
+{
+	std::wstring wsPluginConfigFile = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
+	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
+
+	_createPluginSettingsIfNeeded();
+
+	// read the file
+	tinyxml2::XMLDocument oSettingsXML;
+	tinyxml2::XMLError eResult = oSettingsXML.LoadFile(sPluginConfigFile8.c_str());
+	_xml_check_result(eResult, &oSettingsXML);
+
+	// search for the name=DEBUG element
+	tinyxml2::XMLElement* pRoot = oSettingsXML.FirstChildElement("ConfigUpdaterSettings");
+	tinyxml2::XMLElement* pSearch = pRoot->FirstChildElement("Setting");
+	while (pSearch) {
+		if (pSearch->Attribute("name", "DEBUG")) {	// name="Default Style" styleID="32"
+			break;
+		}
+		pSearch = pSearch->NextSiblingElement("Setting");
+	}
+	if (!pSearch) {
+		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oSettingsXML);
+		return;
+	}
+	_setting_isIntermediateSorted = pSearch->IntAttribute("isIntermediateSorted");
 }
 
 void ConfigUpdater::_populateNppDirs(void)
@@ -387,6 +438,8 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 		_consoleWrite(std::wstring(L"--- ConfigUpdater run at ") + std::wstring(date_str) + L" " + std::wstring(time_str));
 	}
 	_initInternalState();
+	_readPluginSettings();
+	isIntermediateSorted |= _setting_isIntermediateSorted;
 	_updateAllThemes(isIntermediateSorted);
 	if (!custatus_GetInterruptFlag())
 		_updateLangs(isIntermediateSorted);

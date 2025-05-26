@@ -39,6 +39,8 @@ private:
 	void _consoleWrite(tinyxml2::XMLNode* pNode);
 
 	void _initInternalState(void);																													// sets internal attributes back to default
+	void ConfigUpdater::_createPluginSettingsIfNeeded(void);																							// creates the plugin's config file if it dooesn't exist
+	void _readPluginSettings(void);																													// reads the plugin's config file
 	tinyxml2::XMLDocument* _getModelStyler(void);																									// gets the XML
 	void _updateAllThemes(bool isIntermediateSorted);																								// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
 	bool _updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted);			// Updates one particular theme or styler file
@@ -50,6 +52,7 @@ private:
 	void _updateLangs(bool isIntermediateSorted);																									// updates langs.xml to match langs.model.xml
 
 	bool _isAskRestartCancelled = false;																											// Remember whether CANCEL was chosen when asking to restart while looping through themes
+	bool _setting_isIntermediateSorted = false;																										// from settings file, whether or not to generate an intermediate "sorted" file, which has no additions/fixes, but is in same order as final file
 
 	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
