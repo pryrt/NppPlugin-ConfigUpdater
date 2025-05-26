@@ -1,0 +1,36 @@
+/*
+    Copyright (C) 2025  Peter C. Jones <pryrtcode@pryrt.com>
+
+    This file is part of the source code for the ConfigUpdater plugin for Notepad++
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include <winres.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDD_CU_STATUS_DLG DIALOGEX 0, 0, 319, 180
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ConfigUpdater Status"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    EDITTEXT        IDC_CU_STAT_TEXTOUT,7,7,295,132,ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | WS_VSCROLL
+    CONTROL         "",IDC_CU_STAT_PROGRESS1,"msctls_progress32",WS_BORDER,7,141,295,12
+END

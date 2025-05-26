@@ -22,6 +22,17 @@ std::string wstring_to_utf8(std::wstring& wstr)
 	return str;
 }
 
+std::wstring utf8_to_wstring(std::string& str)
+{
+	if (str.empty()) return std::wstring();
+	int szNeeded = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), NULL, 0);
+	if (szNeeded == 0) return std::wstring();
+	std::wstring wstr(szNeeded, L'\0');
+	int result = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), const_cast<LPWSTR>(wstr.data()), szNeeded);
+	if (result == 0) return std::wstring();
+	return wstr;
+}
+
 bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 {
 	std::wstring tmpFileName = path;
@@ -119,7 +130,7 @@ void ConfigUpdater::_ask_rerun_normal(void)
 		GetWindowThreadProcessId(hwnd, &pid);
 		HANDLE process = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
 
-		SIZE_T size;
+		SIZE_T size=0;
 		InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
 		auto p = (PPROC_THREAD_ATTRIBUTE_LIST)new char[size];
 
@@ -377,8 +388,12 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	}
 	_initInternalState();
 	_updateAllThemes(isIntermediateSorted);
-	_updateLangs(isIntermediateSorted);
+	if (!custatus_GetInterruptFlag())
+		_updateLangs(isIntermediateSorted);
 	_consoleWrite(L"--- ConfigUpdater done. ---");
+	custatus_SetProgress(100);
+	custatus_AppendText(L"--- ConfigUpdater done. ---");
+	custatus_CloseWindow();
 	_ask_rerun_normal();
 	return;
 }
@@ -440,6 +455,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 	WIN32_FIND_DATAW infoFound;
 	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
 	for (auto wsDir : themeDirs) {
+		if (custatus_GetInterruptFlag()) break; // exit early on CANCEL
 		if (PathFileExists(wsDir.c_str())) {
 			if (!SetCurrentDirectory(wsDir.c_str())) return;
 			fhFound = FindFirstFile(L"*.xml", &infoFound);
@@ -464,16 +480,16 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 // Updates one particular theme or styler file
 bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
 {
-	// TODO: isWriteable test needs to go in here somewhere:
-	//		when asking, YES=restart, NO=not for this file, CANCEL=stop asking;
-	//		(use a new instance property to store the CANCEL answer)
-
 	// get full path to file
 	delNull(themeDir);
 	delNull(themeName);
 	std::wstring themePath = themeDir + L"\\" + themeName;
 	std::string themePath8 = wstring_to_utf8(themePath);
 	_consoleWrite(std::wstring(L"--- Checking Styler/Theme File: '") + themePath + L"'");
+
+	// update the status dialog
+	std::wstring wsLine = themeName + L"\r\n";
+	custatus_AppendText(const_cast<LPWSTR>(wsLine.c_str()));
 
 	// check for permissions, exit function if cannot write
 	if(!_ask_dir_permissions(themeDir)) return false;
@@ -547,6 +563,9 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 	// Write XML output
 	oStylerDoc.SaveFile(themePath8.c_str());
+
+	// Update progress bar
+	custatus_AddProgress(1);
 
 	return true;
 }
@@ -909,6 +928,9 @@ void ConfigUpdater::_sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, boo
 // updates langs.xml to match langs.model.xml
 void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 {
+	custatus_AppendText(const_cast<LPWSTR>(L"langs.xml\r\n"));
+	custatus_SetProgress(80);
+
 	// Prepare the filenames
 	std::string sFilenameLangsModel = wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
 	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
@@ -1079,6 +1101,9 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 	// save
 	oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
+
+	// Update progress bar
+	custatus_SetProgress(99);
 
 	return;
 }

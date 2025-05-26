@@ -20,6 +20,9 @@
 #include "PluginDefinition.h"
 #include "menuCmdID.h"
 #include "ConfigUpdaterClass.h"
+#include "CUStatusDialog.h"
+
+static HANDLE _hModule;
 
 //
 // The plugin data that Notepad++ needs
@@ -34,8 +37,9 @@ NppData nppData;
 //
 // Initialize your plugin data here
 // It will be called while plugin loading   
-void pluginInit(HANDLE /*hModule*/)
+void pluginInit(HANDLE hModule)
 {
+    _hModule = hModule;
 }
 
 //
@@ -100,6 +104,10 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 void menucall_UpdateConfigFiles()
 {
     static ConfigUpdater oConf(nppData._nppHandle);
+
+    // non-modal allows to still interact with the parent
+    CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_STATUS_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUStatusProc, (LPARAM)NULL);
+
     // TODO: need to determine isIntermediateSorted or not
     bool isIntermediateSorted = true;
     oConf.go(isIntermediateSorted);

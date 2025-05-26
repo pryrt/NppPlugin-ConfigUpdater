@@ -12,6 +12,7 @@
 #include "PluginDefinition.h"
 #include "menuCmdID.h"
 #include "tinyxml2.h"
+#include "CUStatusDialog.h"
 
 class ConfigUpdater {
 public:
