@@ -21,6 +21,7 @@
 #include "menuCmdID.h"
 #include "ConfigUpdaterClass.h"
 #include "CUStatusDialog.h"
+#include "Version.h"
 
 static HANDLE _hModule;
 
@@ -115,5 +116,7 @@ void menucall_UpdateConfigFiles()
 
 void menucall_AboutDlg()
 {
-    ::MessageBox(NULL, TEXT("Information about ConfigUpdater will go here eventually"), TEXT("ConfigUpdater"), MB_OK);
+    std::wstring wsTitle = std::wstring(NPP_PLUGIN_NAME) + L" v" + VERSION_WSTR;
+    std::wstring wsAbout = std::wstring(VERSION_PLUGIN_WDESC) + L"\n\n" + VERSION_WURL;
+    ::MessageBox(NULL, wsAbout.c_str(), wsTitle.c_str(), MB_OK);
 }

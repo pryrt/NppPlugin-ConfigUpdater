@@ -29,6 +29,7 @@
   <ItemGroup>
     <ClInclude Include="..\src\Classes\ConfigUpdaterClass.h" />
     <ClInclude Include="..\src\Dialogs\CUStatusDialog.h" />
+    <ClInclude Include="..\src\Version.h" />
     <ClInclude Include="..\src\Dialogs\resource.h" />
     <ClInclude Include="..\src\DockingFeature\Docking.h" />
     <ClInclude Include="..\src\DockingFeature\DockingDlgInterface.h" />
