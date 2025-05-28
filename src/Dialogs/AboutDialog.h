@@ -18,17 +18,8 @@
 */
 
 #pragma once
-#ifndef IDC_STATIC
-#define IDC_STATIC (-1)
-#endif
+#include <WindowsX.h>
+#include "PluginDefinition.h"
+#include "resource.h"
 
-// Status Dialog
-#define IDD_CU_STATUS_DLG               105
-#define IDC_CU_STAT_TEXTOUT             1000
-#define IDC_CU_STAT_PROGRESS1           1001
-
-// About Dialog
-#define IDD_ABOUTDLG                            101
-#define IDC_VERSION                             1001
-#define IDC_GITHUB                              1002
-#define IDC_TINYXML2                            1003
+INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);

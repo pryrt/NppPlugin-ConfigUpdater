@@ -18,17 +18,13 @@
 */
 
 #pragma once
-#ifndef IDC_STATIC
-#define IDC_STATIC (-1)
-#endif
+#define VERSION_DIGITALVALUE 1, 99, 0, 2
+#define VERSION_VALUE "1.99_beta2\0"
+#define VERSION_WSTR TEXT(VERSION_VALUE)
+#define VERSION_AUTHOR "Peter C. Jones\0"
+#define VERSION_PLUGIN_DESCRIPTION "Notepad++ Plugin to Keep Langs/Stylers/Themes Config Files Up-to-Date\0"
+#define VERSION_PLUGIN_WDESC       TEXT(VERSION_PLUGIN_DESCRIPTION)
+#define VERSION_COPYRIGHT "Copyright 2025 by Peter C. Jones\0"
+#define VERSION_URL "https://github.com/pryrt/NppPlugin-ConfigUpdater/\0"
+#define VERSION_WURL L"https://github.com/pryrt/NppPlugin-ConfigUpdater/\0"
 
-// Status Dialog
-#define IDD_CU_STATUS_DLG               105
-#define IDC_CU_STAT_TEXTOUT             1000
-#define IDC_CU_STAT_PROGRESS1           1001
-
-// About Dialog
-#define IDD_ABOUTDLG                            101
-#define IDC_VERSION                             1001
-#define IDC_GITHUB                              1002
-#define IDC_TINYXML2                            1003

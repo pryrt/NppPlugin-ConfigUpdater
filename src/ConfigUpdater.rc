@@ -19,7 +19,7 @@
 
 
 #include <windows.h>
-#include "Version.h"
+#include "Dialogs\PluginVersion.h"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION	VERSION_DIGITALVALUE

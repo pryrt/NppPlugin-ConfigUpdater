@@ -21,7 +21,8 @@
 #include "menuCmdID.h"
 #include "ConfigUpdaterClass.h"
 #include "CUStatusDialog.h"
-#include "Version.h"
+#include "PluginVersion.h"
+#include "AboutDialog.h"
 
 static HANDLE _hModule;
 
@@ -37,7 +38,7 @@ NppData nppData;
 
 //
 // Initialize your plugin data here
-// It will be called while plugin loading   
+// It will be called while plugin loading
 void pluginInit(HANDLE hModule)
 {
     _hModule = hModule;
@@ -83,7 +84,7 @@ void commandMenuCleanUp()
 //
 // This function help you to initialize your plugin commands
 //
-bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey *sk, bool check0nInit) 
+bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey *sk, bool check0nInit)
 {
     if (index >= nbFunc)
         return false;
@@ -116,7 +117,13 @@ void menucall_UpdateConfigFiles()
 
 void menucall_AboutDlg()
 {
+#if 1
+    // modal freezes the parent
+    DialogBoxParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_ABOUTDLG), nppData._nppHandle, (DLGPROC)abtDlgProc, (LPARAM)NULL);
+    return;
+#else
     std::wstring wsTitle = std::wstring(NPP_PLUGIN_NAME) + L" v" + VERSION_WSTR;
     std::wstring wsAbout = std::wstring(VERSION_PLUGIN_WDESC) + L"\n\n" + VERSION_WURL;
     ::MessageBox(NULL, wsAbout.c_str(), wsTitle.c_str(), MB_OK);
+#endif
 }
