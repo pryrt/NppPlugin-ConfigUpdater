@@ -53,6 +53,7 @@ jobs:
             New-Item -ItemType Directory -Path .\docs
         }
         Copy-Item -Path README.md -Destination .\docs\
+        Copy-Item -Path license.txt -Destination .\docs\
         if((Test-Path -Path bin64\ConfigUpdater.dll)) {
             Copy-Item -Path bin64\ConfigUpdater.dll -Destination .\ConfigUpdater.dll
         }
