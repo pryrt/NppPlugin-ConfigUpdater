@@ -43,3 +43,36 @@ jobs:
       with:
           name: plugin_dll_arm64
           path: arm64\ConfigUpdater.dll
+
+    - name: Create ${{ matrix.build_platform }} Release zipfile
+      if: startsWith(github.ref, 'refs/tags/v') && matrix.build_configuration == 'Release'
+      working-directory: .
+      run: |
+        echo "This only runs on a tag, I hope"
+        if(!(Test-Path -Path .\docs)) {
+            New-Item -ItemType Directory -Path .\docs
+        }
+        Copy-Item -Path README.md -Destination .\docs\
+        if((Test-Path -Path bin64\ConfigUpdater.dll)) {
+            Copy-Item -Path bin64\ConfigUpdater.dll -Destination .\ConfigUpdater.dll
+        }
+        if((Test-Path -Path bin\ConfigUpdater.dll)) {
+            Copy-Item -Path bin\ConfigUpdater.dll -Destination .\ConfigUpdater.dll
+        }
+        if((Test-Path -Path arm64\ConfigUpdater.dll)) {
+            Copy-Item -Path arm64\ConfigUpdater.dll -Destination .\ConfigUpdater.dll
+        }
+        $zipName = "ConfigUpdater_${{ matrix.build_platform }}.zip"
+        $filesToZip = "ConfigUpdater.dll", ".\docs\"
+        Compress-Archive -Path $filesToZip -Destination $zipName
+        dir
+    - name: 🎉 Store ${{ matrix.build_platform }} zipfile as asset
+      if: startsWith(github.ref, 'refs/tags/v') && matrix.build_configuration == 'Release'
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: ./ConfigUpdater_${{ matrix.build_platform }}.zip
+        asset_name: ConfigUpdater_${{ matrix.build_platform }}.zip
+        tag: ${{ github.ref }}
+        overwrite: true
+        body: ${{ github.event.release.body }}
