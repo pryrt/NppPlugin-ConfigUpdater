@@ -56,6 +56,7 @@ bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 // tests if writable, and asks for UAC if not; returns true only when writable
 bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 {
+	if (_doAbort) return false;
 	if (_is_dir_writable(path)) return true;
 	if (_isAskRestartCancelled) {
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
@@ -334,6 +335,7 @@ void ConfigUpdater::_initInternalState(void)
 	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
 	_mapModelDefaultColors["fgColor"] = "";
 	_mapModelDefaultColors["bgColor"] = "";
+	_doAbort = false;
 }
 
 // creates the plugin's config file if it dooesn't exist
@@ -368,7 +370,7 @@ void ConfigUpdater::_readPluginSettings(void)
 	// read the file
 	tinyxml2::XMLDocument oSettingsXML;
 	tinyxml2::XMLError eResult = oSettingsXML.LoadFile(sPluginConfigFile8.c_str());
-	_xml_check_result(eResult, &oSettingsXML);
+	if(_xml_check_result(eResult, &oSettingsXML, wsPluginConfigFile)) return;
 
 	// search for the name=DEBUG element
 	tinyxml2::XMLElement* pRoot = oSettingsXML.FirstChildElement("ConfigUpdaterSettings");
@@ -456,8 +458,10 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_readPluginSettings();
 	isIntermediateSorted |= _setting_isIntermediateSorted;
 	_updateAllThemes(isIntermediateSorted);
+	if (_doAbort) { custatus_CloseWindow(); return; }
 	if (!custatus_GetInterruptFlag())
 		_updateLangs(isIntermediateSorted);
+	if (_doAbort) { custatus_CloseWindow(); return; }
 	_consoleWrite(L"--- ConfigUpdater done. ---");
 	custatus_SetProgress(100);
 	custatus_AppendText(L"--- ConfigUpdater done. ---");
@@ -473,7 +477,7 @@ tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
 	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
 	delNull(fName);
 	tinyxml2::XMLError eResult = pDoc->LoadFile(wstring_to_utf8(fName).c_str());
-	_xml_check_result(eResult, pDoc);
+	if(_xml_check_result(eResult, pDoc, fName)) return pDoc;
 	if (pDoc->RootElement() == NULL) {
 		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, pDoc);
 	}
@@ -514,6 +518,8 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 {
 	tinyxml2::XMLDocument* pModelStylerDoc = _getModelStyler();
 	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted);
+	if (_doAbort) return;	// need to abort
+
 
 	DWORD szNeeded = GetCurrentDirectory(0, NULL);
 	std::wstring curDir(szNeeded, L'\0');
@@ -523,6 +529,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 	WIN32_FIND_DATAW infoFound;
 	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
 	for (auto wsDir : themeDirs) {
+		if (_doAbort) return;	// need to abort
 		if (custatus_GetInterruptFlag()) break; // exit early on CANCEL
 		if (PathFileExists(wsDir.c_str())) {
 			if (!SetCurrentDirectory(wsDir.c_str())) return;
@@ -532,6 +539,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 				while (stillFound) {
 					// process this file
 					stillFound &= _updateOneTheme(pModelStylerDoc, wsDir, infoFound.cFileName, isIntermediateSorted);
+					if (_doAbort) return;	// need to abort
 
 					// look for next file
 					stillFound &= static_cast<bool>(FindNextFile(fhFound, &infoFound));
@@ -570,10 +578,11 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	// get the XML
 	tinyxml2::XMLDocument oStylerDoc;
 	tinyxml2::XMLError eResult = oStylerDoc.LoadFile(themePath8.c_str());
-	_xml_check_result(eResult, &oStylerDoc);
+	if(_xml_check_result(eResult, &oStylerDoc, themePath)) return false;
 	tinyxml2::XMLElement* pStylerRoot = oStylerDoc.RootElement();
-	if (pStylerRoot == NULL) _xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc);
-	// TODO: if I need to track the top-level comment, I am hoping that I can test oStylerDoc.FirstChild vs pStylerRoot
+	if (pStylerRoot == NULL)
+		if(_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc, themePath))
+			return false;
 
 	// grab the theme's and model's LexerStyles node for future insertions
 	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
@@ -1002,6 +1011,8 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	// Prepare the filenames
 	std::string sFilenameLangsModel = wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
 	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
+	std::wstring wsFilenameLangsModel = _nppAppDir + L"\\langs.model.xml";
+	std::wstring wsFilenameLangsActive = _nppCfgDir + L"\\langs.xml";
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
 
 	// check for permissions, exit function if cannot write
@@ -1010,9 +1021,9 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	// load the active and model documents
 	tinyxml2::XMLDocument oDocLangsModel, oDocLangsActive;
 	tinyxml2::XMLError eResult = oDocLangsModel.LoadFile(sFilenameLangsModel.c_str());
-	_xml_check_result(eResult, &oDocLangsModel);
+	if(_xml_check_result(eResult, &oDocLangsModel, wsFilenameLangsModel)) return;
 	eResult = oDocLangsActive.LoadFile(sFilenameLangsActive.c_str());
-	_xml_check_result(eResult, &oDocLangsActive);
+	if(_xml_check_result(eResult, &oDocLangsActive, wsFilenameLangsActive)) return;
 
 	// get the <Languages> element from each
 	tinyxml2::XMLElement* pElLanguagesModel = oDocLangsModel.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");

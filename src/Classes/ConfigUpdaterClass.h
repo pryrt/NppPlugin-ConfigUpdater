@@ -51,6 +51,7 @@ private:
 	void _sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, bool isIntermediateSorted = false);												// Sorts all of the Language elements in the Languages container
 	void _updateLangs(bool isIntermediateSorted);																									// updates langs.xml to match langs.model.xml
 
+	bool _doAbort = false;																															// "Abort" => Exit out without continuing with more files
 	bool _isAskRestartCancelled = false;																											// Remember whether CANCEL was chosen when asking to restart while looping through themes
 	bool _isAskRestartYes = false;																													// Remember if YES was pressed, so don't ask at end
 	bool _setting_isIntermediateSorted = false;																										// from settings file, whether or not to generate an intermediate "sorted" file, which has no additions/fixes, but is in same order as final file
@@ -71,14 +72,43 @@ private:
 	// look for an element, based on {Parent, FirstChild, or both} which is of a specific ElementType, having a specific AttributeName with specific AttributeValue
 	tinyxml2::XMLElement* _find_element_with_attribute_value(tinyxml2::XMLElement* pParent, tinyxml2::XMLElement* pFirst, std::string sElementType, std::string sAttributeName, std::string sAttributeValue, bool caseSensitive=true);
 
-	tinyxml2::XMLError _xml_check_result(tinyxml2::XMLError a_eResult, tinyxml2::XMLDocument* p_doc = NULL)
+	// compares the XMLError result to XML_SUCCESS, and returns a TRUE boolean to indicate failure
+	bool _xml_check_result(tinyxml2::XMLError a_eResult, tinyxml2::XMLDocument* p_doc = NULL, std::wstring wsFilePath = std::wstring(L""))
 	{
 		if (a_eResult != tinyxml2::XML_SUCCESS) {
 			std::string sMsg = std::string("XML Error #") + std::to_string(static_cast<int>(a_eResult));
-			if (p_doc != NULL) sMsg += std::string(": ") + std::string(p_doc->ErrorStr());
+			if (p_doc != NULL) {
+				sMsg += std::string(": ") + std::string(p_doc->ErrorStr());
+				if (p_doc->ErrorLineNum()) {
+					sMsg += "\n\nI will try to open the file near that error.";
+				}
+			}
 			::MessageBoxA(NULL, sMsg.c_str(), "XML Error", MB_ICONWARNING | MB_OK);
+			if (p_doc!=NULL && p_doc->ErrorLineNum() && wsFilePath.size()) {
+				if (::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsFilePath.c_str()))) {
+					extern NppData nppData;	// not in PluginDefinition.h
+
+					// Get the current scintilla
+					int which = -1;
+					::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
+					HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
+
+					// SCI_GOTOLINE in the current scintilla instance
+					WPARAM zeroLine = static_cast<WPARAM>(p_doc->ErrorLineNum() - 1);
+					::SendMessage(curScintilla, SCI_GOTOLINE, zeroLine, 0);
+
+					// do annotation
+					::SendMessage(curScintilla, SCI_ANNOTATIONCLEARALL, 0, 0);
+					::SendMessage(curScintilla, SCI_ANNOTATIONSETVISIBLE, ANNOTATION_BOXED, 0);
+					::SendMessageA(curScintilla, SCI_ANNOTATIONSETTEXT, zeroLine, reinterpret_cast<LPARAM>(p_doc->ErrorStr()));
+
+					// need to stop
+					_doAbort = true;
+				};
+			}
+			return true;
 		}
-		return a_eResult;
+		return false;
 	};
 
 	////////////////////////////////
