@@ -71,16 +71,19 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 	case IDNO:
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC.");
 		_isAskRestartCancelled = false;
+		_isAskRestartYes = false;
 		break;
 	case IDCANCEL:
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
 		_isAskRestartCancelled = true;
+		_isAskRestartYes = false;
 		break;
 	case IDYES:
 		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
 		_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
 		_isAskRestartCancelled = false;
+		_isAskRestartYes = true;
 		// prompt for UAC
 		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
 		std::wstring wsArgs(szLen + 1, '\0');
@@ -94,23 +97,35 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 	return false;
 }
 
+// tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
 void ConfigUpdater::_ask_rerun_normal(void)
 {
 	HANDLE hToken = nullptr;
 	TOKEN_ELEVATION elevation;
 	DWORD dwSize;
 
+	// don't need to ask if it's already in the midst of a restart
+	if (_isAskRestartYes) return;
+
 	// check for elevated
 	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return;		// if i cannot open token, no way to find out if elevated
 	bool bGotInfo = GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize); 
 	CloseHandle(hToken);
 	if (!bGotInfo) return;					// if i cannot get the info, no way to find out if elevated
-	if (!elevation.TokenIsElevated) return;	// not elevated, so no need to prompt the user
-	int res = ::MessageBox(
-		_hwndNPP,
-		L"You are running as Administrator, with elevated UAC permission.\n\nWould you like to restart Notepad++ as a normal user?",
-		L"Restart Notpead++ Normally?",
-		MB_YESNO);
+	std::wstring msg, ttl;
+
+	// message depends on whether it's elevated or not
+	if (elevation.TokenIsElevated) {
+		msg = L"You are running as Administrator, with elevated UAC permission, so it is a good idea to restart as a normal user.\n\nAlso, your config updates will not take effect until you restart Notepad++.\n\nWould you like to restart Notepad++ as a normal user?";
+		ttl = L"Restart Notpead++ Normally?";
+	}
+	else {
+		msg = L"Your config updates will not take effect until you restart Notepad++.\n\nWould you like to restart Notepad++ at this time?";
+		ttl = L"Restart Notpead++?";
+	}
+
+	// ask about restart, whether elevated or not
+	int res = ::MessageBox(_hwndNPP, msg.c_str(), ttl.c_str(), MB_YESNO);
 	switch (res) {
 	case IDYES: {
 		// derive new command line string

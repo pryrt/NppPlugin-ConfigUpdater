@@ -52,12 +52,13 @@ private:
 	void _updateLangs(bool isIntermediateSorted);																									// updates langs.xml to match langs.model.xml
 
 	bool _isAskRestartCancelled = false;																											// Remember whether CANCEL was chosen when asking to restart while looping through themes
+	bool _isAskRestartYes = false;																													// Remember if YES was pressed, so don't ask at end
 	bool _setting_isIntermediateSorted = false;																										// from settings file, whether or not to generate an intermediate "sorted" file, which has no additions/fixes, but is in same order as final file
 
 	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
 	bool _ask_dir_permissions(const std::wstring& path);																							// tests if writable, and asks for UAC if not
-	void _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally
+	void _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
 
 	////////////////////////////////
 	// XML Helpers
