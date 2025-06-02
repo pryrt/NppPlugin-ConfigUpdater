@@ -682,7 +682,9 @@ tinyxml2::XMLElement* ConfigUpdater::_find_element_with_attribute_value(tinyxml2
 {
 	if (!pParent && !pFirst) return nullptr;
 	tinyxml2::XMLElement* pMyParent = pParent ? pParent->ToElement() : pFirst->Parent()->ToElement();
-	tinyxml2::XMLElement* pFoundElement = pFirst ? pFirst->ToElement() : pMyParent->FirstChildElement(sElementType.c_str())->ToElement();
+	tinyxml2::XMLElement* pFCE = pMyParent->FirstChildElement(sElementType.c_str());
+	if (!pFirst && !pFCE) return nullptr;
+	tinyxml2::XMLElement* pFoundElement = pFirst ? pFirst->ToElement() : pFCE->ToElement();
 	while (pFoundElement) {
 		// if this node has the right attribute pair, great!
 		if (caseSensitive) {
@@ -1062,14 +1064,18 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 			// add the clone as a child of the active <Languages> element
 			pSearchLangActive = pElLanguagesActive->InsertEndChild(pClone)->ToElement();
 
+			// v2.0.1: if pSearchLangActive is NULL, it means something went wrong when adding the language.
+			// this will change the message given to the logfile, and will prevent the loop-thru-keywords+comments WHILE loop (below) from running
+
 			// inform the user
-			std::string msg = std::string("+ Languages: add missing Language='") + sLangName + "'";
+			std::string msg = std::string(pSearchLangActive ? "+ Languages: add missing Language='" : "! Languages: could NOT add missing Language='") + sLangName + "'";
 			_consoleWrite(msg);
 		}
 
 		// loop through all the <Keywords> _and_ comments in the Model
+		//		v2.0.1: need to prevent WHILE loop from throwing exception: don't run this WHILE loop if !pSearchLangActive
 		tinyxml2::XMLNode* pNodeKeywordModel = pElLangModel->FirstChild();
-		while (pNodeKeywordModel) {
+		while (pNodeKeywordModel && pSearchLangActive) {
 			bool isComment = pNodeKeywordModel->ToComment();
 			std::string sKeywordName = isComment ? pNodeKeywordModel->Value() : pNodeKeywordModel->ToElement()->Attribute("name");
 			tinyxml2::XMLNode* pSearchKeywordActive = nullptr;
