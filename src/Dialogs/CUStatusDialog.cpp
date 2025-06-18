@@ -23,7 +23,7 @@
 std::wstring _editText = L"";
 bool _InterruptFlag = false;
 
-HWND _hwndDlg;
+HWND g_hwndCUStatusDlg;
 
 INT_PTR CALLBACK ciDlgCUStatusProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM /*lParam*/)
 {
@@ -32,28 +32,18 @@ INT_PTR CALLBACK ciDlgCUStatusProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
     case WM_INITDIALOG:
     {
         // save HWND
-        _hwndDlg = hwndDlg;
+        g_hwndCUStatusDlg = hwndDlg;
 
-        // Find Center and then position the window:
+        ////////
+        // need to know versions for making darkMode decisions
+        ////////
+        LRESULT versionNpp = ::SendMessage(nppData._nppHandle, NPPM_GETNPPVERSION, 1, 0);	// HIWORD(nppVersion) = major version; LOWORD(nppVersion) = zero-padded minor (so 8|500 will come after 8|410)
+        LRESULT versionDarkDialog = MAKELONG(540, 8);		// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
+        bool isDM = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
 
-        // find App center
-        RECT rc;
-        HWND hParent = GetParent(hwndDlg);
-        ::GetClientRect(hParent, &rc);
-        POINT center;
-        int w = rc.right - rc.left;
-        int h = rc.bottom - rc.top;
-        center.x = rc.left + w / 2;
-        center.y = rc.top + h / 2;
-        ::ClientToScreen(hParent, &center);
-
-        // and position dialog
-        RECT dlgRect;
-        ::GetClientRect(hwndDlg, &dlgRect);
-        int x = center.x - (dlgRect.right - dlgRect.left) / 2;
-        int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
-        ::SetWindowPos(hwndDlg, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
-
+        ////////
+        // setup all the controls before triggering dark mode
+        ////////
         // not interrupted yet
         _InterruptFlag = false;
 
@@ -63,6 +53,31 @@ INT_PTR CALLBACK ciDlgCUStatusProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
         // add some text
         custatus_ClearText();
         custatus_AppendText(L"--- ConfigUpdater: Starting ---\r\n");
+
+        ////////
+        // trigger darkmode
+        ////////
+        if (isDM && versionNpp >= versionDarkDialog) {
+            ::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndCUStatusDlg));
+        }
+
+        ////////
+        // Finally, Find Center and then position and display the window:
+        ////////
+        RECT rc;
+        HWND hParent = GetParent(hwndDlg);
+        ::GetClientRect(hParent, &rc);
+        POINT center;
+        int w = rc.right - rc.left;
+        int h = rc.bottom - rc.top;
+        center.x = rc.left + w / 2;
+        center.y = rc.top + h / 2;
+        ::ClientToScreen(hParent, &center);
+        RECT dlgRect;
+        ::GetClientRect(hwndDlg, &dlgRect);
+        int x = center.x - (dlgRect.right - dlgRect.left) / 2;
+        int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
+        ::SetWindowPos(hwndDlg, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
 
         return true;
     }
@@ -89,7 +104,7 @@ INT_PTR CALLBACK ciDlgCUStatusProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
 
 void custatus_CloseWindow(void)
 {
-    ::SendMessage(_hwndDlg, WM_DESTROY, 0, 0);
+    ::SendMessage(g_hwndCUStatusDlg, WM_DESTROY, 0, 0);
 }
 
 void custatus_ClearText(void)
@@ -103,7 +118,7 @@ void custatus_AppendText(LPWSTR newText)
     _editText += newText;
 
     // get edit control from dialog
-    HWND hwndOutput = GetDlgItem(_hwndDlg, IDC_CU_STAT_TEXTOUT);
+    HWND hwndOutput = GetDlgItem(g_hwndCUStatusDlg, IDC_CU_STAT_TEXTOUT);
 
     // set the full text
     ::SendMessage(hwndOutput, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(_editText.c_str()));
@@ -117,12 +132,12 @@ void custatus_AppendText(LPWSTR newText)
 
 void custatus_SetProgress(DWORD pct)
 {
-    ::SendDlgItemMessage(_hwndDlg, IDC_CU_STAT_PROGRESS1, PBM_SETPOS, pct, 0);
+    ::SendDlgItemMessage(g_hwndCUStatusDlg, IDC_CU_STAT_PROGRESS1, PBM_SETPOS, pct, 0);
 }
 
 void custatus_AddProgress(DWORD pct)
 {
-    ::SendDlgItemMessage(_hwndDlg, IDC_CU_STAT_PROGRESS1, PBM_DELTAPOS, pct, 0);
+    ::SendDlgItemMessage(g_hwndCUStatusDlg, IDC_CU_STAT_PROGRESS1, PBM_DELTAPOS, pct, 0);
 }
 
 bool custatus_GetInterruptFlag(void)
