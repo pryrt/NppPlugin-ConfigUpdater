@@ -69,31 +69,31 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		+ L"(don't forget to rerun Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts.";
 	int res = ::MessageBox(_hwndNPP, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
 	switch (res) {
-	case IDNO:
-		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC.");
-		_isAskRestartCancelled = false;
-		_isAskRestartYes = false;
-		break;
-	case IDCANCEL:
-		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
-		_isAskRestartCancelled = true;
-		_isAskRestartYes = false;
-		break;
-	case IDYES:
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
-		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
-		_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
-		_isAskRestartCancelled = false;
-		_isAskRestartYes = true;
-		// prompt for UAC
-		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
-		std::wstring wsArgs(szLen + 1, '\0');
-		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
-		if (!szGot) wsArgs = L"";
-		std::wstring wsRun = std::wstring(L"/C ECHO Wait 5sec while old N++ closes & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
-		ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWDEFAULT);	/* SW_SHOWMINIMIZED */
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
-		break;
+		case IDNO:
+			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC.");
+			_isAskRestartCancelled = false;
+			_isAskRestartYes = false;
+			break;
+		case IDCANCEL:
+			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC, and do not ask again.");
+			_isAskRestartCancelled = true;
+			_isAskRestartYes = false;
+			break;
+		case IDYES:
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
+			_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
+			_isAskRestartCancelled = false;
+			_isAskRestartYes = true;
+			// prompt for UAC
+			size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+			std::wstring wsArgs(szLen + 1, '\0');
+			size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+			if (!szGot) wsArgs = L"";
+			std::wstring wsRun = std::wstring(L"/C ECHO Wait 5sec while old N++ closes & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+			ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWDEFAULT);	/* SW_SHOWMINIMIZED */
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+			break;
 	}
 	return false;
 }
@@ -110,7 +110,7 @@ void ConfigUpdater::_ask_rerun_normal(void)
 
 	// check for elevated
 	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return;		// if i cannot open token, no way to find out if elevated
-	bool bGotInfo = GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize); 
+	bool bGotInfo = GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize);
 	CloseHandle(hToken);
 	if (!bGotInfo) return;					// if i cannot get the info, no way to find out if elevated
 	std::wstring msg, ttl;
@@ -128,61 +128,61 @@ void ConfigUpdater::_ask_rerun_normal(void)
 	// ask about restart, whether elevated or not
 	int res = ::MessageBox(_hwndNPP, msg.c_str(), ttl.c_str(), MB_YESNO);
 	switch (res) {
-	case IDYES: {
-		// derive new command line string
-		size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
-		std::wstring wsArgs(szLen + 1, '\0');
-		size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
-		if (!szGot) wsArgs = L"";
-		std::wstring wsRun = std::wstring(L"/C echo Wait 5sec while old N++ exits. & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+		case IDYES: {
+			// derive new command line string
+			size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+			std::wstring wsArgs(szLen + 1, '\0');
+			size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+			if (!szGot) wsArgs = L"";
+			std::wstring wsRun = std::wstring(L"/C echo Wait 5sec while old N++ exits. & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
 
-		// cannot use ShellExecute, because it doesn't de-elevate :-(
-		//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
+			// cannot use ShellExecute, because it doesn't de-elevate :-(
+			//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
 
-		// try the method suggested here: <https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443>
-		HWND hwnd = GetShellWindow();
+			// try the method suggested here: <https://devblogs.microsoft.com/oldnewthing/20190425-00/?p=102443>
+			HWND hwnd = GetShellWindow();
 
-		DWORD pid;
-		GetWindowThreadProcessId(hwnd, &pid);
-		HANDLE process = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
+			DWORD pid;
+			GetWindowThreadProcessId(hwnd, &pid);
+			HANDLE process = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
 
-		SIZE_T size=0;
-		InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
-		auto p = (PPROC_THREAD_ATTRIBUTE_LIST)new char[size];
+			SIZE_T size = 0;
+			InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+			auto p = (PPROC_THREAD_ATTRIBUTE_LIST)new char[size];
 
-		InitializeProcThreadAttributeList(p, 1, 0, &size);
-		UpdateProcThreadAttribute(p, 0,
-			PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
-			&process, sizeof(process),
-			nullptr, nullptr);
+			InitializeProcThreadAttributeList(p, 1, 0, &size);
+			UpdateProcThreadAttribute(p, 0,
+				PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+				&process, sizeof(process),
+				nullptr, nullptr);
 
-		wchar_t cmd[] = L"C:\\Windows\\System32\\cmd.exe";
-		STARTUPINFOEX siex = {};
-		siex.lpAttributeList = p;
-		siex.StartupInfo.cb = sizeof(siex);
-		//siex.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
-		//siex.StartupInfo.wShowWindow = SW_MINIMIZE;
-		PROCESS_INFORMATION pi;
+			wchar_t cmd[] = L"C:\\Windows\\System32\\cmd.exe";
+			STARTUPINFOEX siex = {};
+			siex.lpAttributeList = p;
+			siex.StartupInfo.cb = sizeof(siex);
+			//siex.StartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+			//siex.StartupInfo.wShowWindow = SW_MINIMIZE;
+			PROCESS_INFORMATION pi;
 
-		std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
+			std::wstring wsFullCommandLine = std::wstring(L"cmd.exe ") + wsRun;
 
-		CreateProcess(
-			cmd, const_cast<LPWSTR>(wsFullCommandLine.c_str()),
-			nullptr, nullptr, FALSE,
-			EXTENDED_STARTUPINFO_PRESENT,
-			nullptr, nullptr,
-			&siex.StartupInfo, &pi);
+			CreateProcess(
+				cmd, const_cast<LPWSTR>(wsFullCommandLine.c_str()),
+				nullptr, nullptr, FALSE,
+				EXTENDED_STARTUPINFO_PRESENT,
+				nullptr, nullptr,
+				&siex.StartupInfo, &pi);
 
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
-		delete[](char*)p;
-		CloseHandle(process);
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+			delete[](char*)p;
+			CloseHandle(process);
 
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
-		break;
-	}
-	case IDNO:
-		break;
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+			break;
+		}
+		case IDNO:
+			break;
 	}
 
 }
@@ -235,7 +235,7 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 //		Consumer is required to CloseHandle() when done writing
 HANDLE ConfigUpdater::_consoleCheck()
 {
-	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigDir + L"\\ConfigUpdater.log";
+	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdater.log";
 
 	// whether the file exists or not, need to open it for Append
 	HANDLE hConsoleFile = CreateFile(
@@ -326,7 +326,14 @@ ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 	_populateNppDirs();
 	_initInternalState();
 	_createPluginSettingsIfNeeded();
+	_deleteOldFileIfNeeded(_nppCfgPluginConfigDir + L"\\ConfigUpdater.log");	// don't keep logfile if it's in the old location
 };
+
+void ConfigUpdater::_deleteOldFileIfNeeded(std::wstring fname)
+{
+	if (PathFileExists(fname.c_str()))
+		DeleteFile(fname.c_str());
+}
 
 void ConfigUpdater::_initInternalState(void)
 {
@@ -341,28 +348,49 @@ void ConfigUpdater::_initInternalState(void)
 // creates the plugin's config file if it dooesn't exist
 void ConfigUpdater::_createPluginSettingsIfNeeded(void)
 {
-	std::wstring wsPluginConfigFile = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigOld = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
 	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
 
-	// create new file if it doesn't exist
-	if (!PathFileExists(wsPluginConfigFile.c_str())) {
-		tinyxml2::XMLDocument wDoc;
-		tinyxml2::XMLElement* pRoot = wDoc.NewElement("ConfigUpdaterSettings");
-		wDoc.InsertFirstChild(pRoot);
-
-		tinyxml2::XMLElement* pSetting = pRoot->InsertNewChildElement("Setting");
-		pSetting->SetAttribute("name", "DEBUG");
-		pSetting->SetAttribute("isIntermediateSorted", 0);
-
-		wDoc.SaveFile(sPluginConfigFile8.c_str());
+	// Make sure that the config directory exists
+	if (!PathFileExists(_nppCfgPluginConfigMyDir.c_str())) {
+		BOOL stat = CreateDirectory(_nppCfgPluginConfigMyDir.c_str(), NULL);
+		if (!stat) return;	// cannot do the next checks if I cannot create it
 	}
 
+	// Make sure that the config file exists
+	if (!PathFileExists(wsPluginConfigFile.c_str())) {
+		// move the old config file if it's found in the old location
+		if (PathFileExists(wsPluginConfigOld.c_str())) {
+			MoveFile(wsPluginConfigOld.c_str(), wsPluginConfigFile.c_str());
+			// i _could_ check status like above, but if it fails to move, I want to create it in the if() below, so there's no "return" to do, so no reason to save status
+		}
+		// if the file still doesn't exist (either it didn't before, or the move failed), create it
+		if (!PathFileExists(wsPluginConfigFile.c_str())) {
+			tinyxml2::XMLDocument wDoc;
+			tinyxml2::XMLElement* pRoot = wDoc.NewElement("ConfigUpdaterSettings");
+			wDoc.InsertFirstChild(pRoot);
+
+			tinyxml2::XMLElement* pSetting = pRoot->InsertNewChildElement("Setting");
+			pSetting->SetAttribute("name", "DEBUG");
+			pSetting->SetAttribute("isIntermediateSorted", 0);
+
+			wDoc.SaveFile(sPluginConfigFile8.c_str());
+
+			// don't continue if the new location still doesn't exist
+			if (!PathFileExists(wsPluginConfigFile.c_str()))
+				return;
+		}
+	}
+
+	// delete the old config file if it still exists
+	_deleteOldFileIfNeeded(wsPluginConfigOld);
 }
 
 // reads the plugin's config file
 void ConfigUpdater::_readPluginSettings(void)
 {
-	std::wstring wsPluginConfigFile = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
 	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
 
 	_createPluginSettingsIfNeeded();
@@ -370,7 +398,7 @@ void ConfigUpdater::_readPluginSettings(void)
 	// read the file
 	tinyxml2::XMLDocument oSettingsXML;
 	tinyxml2::XMLError eResult = oSettingsXML.LoadFile(sPluginConfigFile8.c_str());
-	if(_xml_check_result(eResult, &oSettingsXML, wsPluginConfigFile)) return;
+	if (_xml_check_result(eResult, &oSettingsXML, wsPluginConfigFile)) return;
 
 	// search for the name=DEBUG element
 	tinyxml2::XMLElement* pRoot = oSettingsXML.FirstChildElement("ConfigUpdaterSettings");
@@ -396,6 +424,7 @@ void ConfigUpdater::_populateNppDirs(void)
 	::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, sz, reinterpret_cast<LPARAM>(pluginCfgDir.data()));
 	delNull(pluginCfgDir);
 	_nppCfgPluginConfigDir = pluginCfgDir;
+	_nppCfgPluginConfigMyDir = pluginCfgDir + L"\\ConfigUpdater";
 
 	// %AppData%\Notepad++\Plugins or equiv
 	//		since it's removing the tail, it will never be longer than pluginCfgDir; since it's in-place, initialize with the first
@@ -477,7 +506,7 @@ tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
 	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
 	delNull(fName);
 	tinyxml2::XMLError eResult = pDoc->LoadFile(wstring_to_utf8(fName).c_str());
-	if(_xml_check_result(eResult, pDoc, fName)) return pDoc;
+	if (_xml_check_result(eResult, pDoc, fName)) return pDoc;
 	if (pDoc->RootElement() == NULL) {
 		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, pDoc);
 	}
@@ -568,7 +597,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	custatus_AppendText(const_cast<LPWSTR>(wsLine.c_str()));
 
 	// check for permissions, exit function if cannot write
-	if(!_ask_dir_permissions(themeDir)) return false;
+	if (!_ask_dir_permissions(themeDir)) return false;
 
 	// I don't know yet whether tinyxml2 has the TopLevelComment problem that py::xml.etree has.  I will have to watch out for that
 	// remove comment from previous call of update_stylers(), otherwise no-comment myTheme.xml would inherit comment from commented MossyLawn.xml (from .py:2024-Aug-29 bugfix)
@@ -578,10 +607,10 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	// get the XML
 	tinyxml2::XMLDocument oStylerDoc;
 	tinyxml2::XMLError eResult = oStylerDoc.LoadFile(themePath8.c_str());
-	if(_xml_check_result(eResult, &oStylerDoc, themePath)) return false;
+	if (_xml_check_result(eResult, &oStylerDoc, themePath)) return false;
 	tinyxml2::XMLElement* pStylerRoot = oStylerDoc.RootElement();
 	if (pStylerRoot == NULL)
-		if(_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc, themePath))
+		if (_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc, themePath))
 			return false;
 
 	// grab the theme's and model's LexerStyles node for future insertions
@@ -810,7 +839,7 @@ void ConfigUpdater::_addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGloba
 			static std::string sCmpZero = " Attention : Don't modify the name of styleID=\"0\" ";
 			if (pModelNode->Value() == sCmpZero) {
 				tinyxml2::XMLComment* pThemeZeroComment = pElThemeGlobalStyles->FirstChild()->ToComment();
-				if(pThemeZeroComment && (std::string(pThemeZeroComment->Value()) == sCmpZero)) {
+				if (pThemeZeroComment && (std::string(pThemeZeroComment->Value()) == sCmpZero)) {
 					; // doing nothing in true is more readable than negating the logic
 				}
 				else {
@@ -1018,14 +1047,14 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
 
 	// check for permissions, exit function if cannot write
-	if(!_ask_dir_permissions(_nppCfgDir)) return;
+	if (!_ask_dir_permissions(_nppCfgDir)) return;
 
 	// load the active and model documents
 	tinyxml2::XMLDocument oDocLangsModel, oDocLangsActive;
 	tinyxml2::XMLError eResult = oDocLangsModel.LoadFile(sFilenameLangsModel.c_str());
-	if(_xml_check_result(eResult, &oDocLangsModel, wsFilenameLangsModel)) return;
+	if (_xml_check_result(eResult, &oDocLangsModel, wsFilenameLangsModel)) return;
 	eResult = oDocLangsActive.LoadFile(sFilenameLangsActive.c_str());
-	if(_xml_check_result(eResult, &oDocLangsActive, wsFilenameLangsActive)) return;
+	if (_xml_check_result(eResult, &oDocLangsActive, wsFilenameLangsActive)) return;
 
 	// get the <Languages> element from each
 	tinyxml2::XMLElement* pElLanguagesModel = oDocLangsModel.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
@@ -1138,7 +1167,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 						if (!mActiveKeywords.count(token) && token.size()) {
 							vActiveKeywords.push_back(token);
 							mActiveKeywords[token] = true;
-							sAdded += (nAdded ? " " : "" ) + token;
+							sAdded += (nAdded ? " " : "") + token;
 							++nAdded;
 						}
 					}
@@ -1154,7 +1183,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 				// join the list together into an updated string of keywords
 				//		track the length of each "line" of text: if the new keyword would cause it to go beyond 8k, start a new line
 				std::string sUpdatedKeywords = "";
-				size_t lineLength=0, maxLineLength = 8000;
+				size_t lineLength = 0, maxLineLength = 8000;
 				bool first = true;
 				for (auto sKw : vActiveKeywords) {
 					if (!first) {

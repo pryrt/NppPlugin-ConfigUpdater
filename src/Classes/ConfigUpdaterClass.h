@@ -39,7 +39,8 @@ private:
 	void _consoleWrite(tinyxml2::XMLNode* pNode);
 
 	void _initInternalState(void);																													// sets internal attributes back to default
-	void ConfigUpdater::_createPluginSettingsIfNeeded(void);																							// creates the plugin's config file if it dooesn't exist
+	void _createPluginSettingsIfNeeded(void);																										// creates the plugin's config file if it dooesn't exist
+	void _deleteOldFileIfNeeded(std::wstring fname);																								// Deletes the old-location file (settings or logfile) if it exists
 	void _readPluginSettings(void);																													// reads the plugin's config file
 	tinyxml2::XMLDocument* _getModelStyler(void);																									// gets the XML
 	void _updateAllThemes(bool isIntermediateSorted);																								// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
@@ -122,6 +123,7 @@ private:
 		_nppExePath,
 		_nppCfgDir,
 		_nppCfgPluginConfigDir,
+		_nppCfgPluginConfigMyDir,
 		_nppCfgUdlDir,
 		_nppCfgFunctionListDir,
 		_nppCfgAutoCompletionDir,
