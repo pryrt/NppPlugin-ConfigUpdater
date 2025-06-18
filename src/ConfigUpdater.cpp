@@ -48,7 +48,7 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD  reasonForCall, LPVOID /*lpReserved*
 	}
 	catch (...) { return FALSE; }
 
-    return TRUE;
+	return TRUE;
 }
 
 
@@ -58,28 +58,38 @@ extern "C" __declspec(dllexport) void setInfo(NppData notpadPlusData)
 	commandMenuInit();
 }
 
-extern "C" __declspec(dllexport) const TCHAR * getName()
+extern "C" __declspec(dllexport) const TCHAR* getName()
 {
 	return NPP_PLUGIN_NAME;
 }
 
-extern "C" __declspec(dllexport) FuncItem * getFuncsArray(int *nbF)
+extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* nbF)
 {
 	*nbF = nbFunc;
 	return funcItem;
 }
 
 
-extern "C" __declspec(dllexport) void beNotified(SCNotification *notifyCode)
+extern "C" __declspec(dllexport) void beNotified(SCNotification* notifyCode)
 {
-	switch (notifyCode->nmhdr.code) 
+	switch (notifyCode->nmhdr.code)
 	{
 		case NPPN_SHUTDOWN:
 		{
 			commandMenuCleanUp();
+			break;
 		}
-		break;
-
+		case NPPN_DARKMODECHANGED:
+		{
+			std::vector<HWND> hw_dlgs = { g_hwndAboutDlg, g_hwndCUStatusDlg };
+			for (auto hw : hw_dlgs) {
+				if (hw) {
+					::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfHandleChange), reinterpret_cast<LPARAM>(hw));
+					::SetWindowPos(hw, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED); // to redraw titlebar
+				}
+			}
+			break;
+		}
 		default:
 			return;
 	}
@@ -104,6 +114,6 @@ extern "C" __declspec(dllexport) LRESULT messageProc(UINT /*Message*/, WPARAM /*
 #ifdef UNICODE
 extern "C" __declspec(dllexport) BOOL isUnicode()
 {
-    return TRUE;
+	return TRUE;
 }
 #endif //UNICODE

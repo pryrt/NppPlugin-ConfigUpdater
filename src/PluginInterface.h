@@ -23,6 +23,7 @@
 
 #include "Scintilla.h"
 #include "Notepad_plus_msgs.h"
+#include "NPP_DarkMode.h"
 
 
 typedef const wchar_t * (__cdecl * PFUNCGETNAME)();

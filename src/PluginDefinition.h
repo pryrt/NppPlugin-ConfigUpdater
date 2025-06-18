@@ -75,4 +75,17 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 void menucall_UpdateConfigFiles();
 void menucall_AboutDlg();
 
+//
+// Need to expose the globals from PluginDefinition.cpp:
+//
+extern NppData nppData;
+extern FuncItem funcItem[nbFunc];
+
+//
+// My global variables
+//
+
+extern HWND g_hwndAboutDlg;
+extern HWND g_hwndCUStatusDlg;
+
 #endif //PLUGINDEFINITION_H
