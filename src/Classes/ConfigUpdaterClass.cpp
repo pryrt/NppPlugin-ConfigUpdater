@@ -613,6 +613,11 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 		if (_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc, themePath))
 			return false;
 
+	// save a copy of the current XML output for future comparison
+	tinyxml2::XMLPrinter xPrinter;
+	oStylerDoc.Accept(&xPrinter);
+	std::string sOrigThemeText = xPrinter.CStr();
+
 	// grab the theme's and model's LexerStyles node for future insertions
 	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
 	tinyxml2::XMLElement* pElModelLexerStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
@@ -667,8 +672,13 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	tinyxml2::XMLElement* pElModelGlobalStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
 	_addMissingGlobalWidgets(pElModelGlobalStyles, pElThemeGlobalStyles, keepModelColors);
 
-	// Write XML output
-	oStylerDoc.SaveFile(themePath8.c_str());
+	// Write XML output only if needed: use the saved copy of the XML text compared to the updated text
+	xPrinter.ClearBuffer();
+	oStylerDoc.Accept(&xPrinter);
+	std::string sNewThemeText = xPrinter.CStr();
+
+	if (sNewThemeText != sOrigThemeText)
+		oStylerDoc.SaveFile(themePath8.c_str());
 
 	// Update progress bar
 	custatus_AddProgress(1);
@@ -1056,6 +1066,11 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	eResult = oDocLangsActive.LoadFile(sFilenameLangsActive.c_str());
 	if (_xml_check_result(eResult, &oDocLangsActive, wsFilenameLangsActive)) return;
 
+	// save a copy of the current XML output for future comparison
+	tinyxml2::XMLPrinter xPrinter;
+	oDocLangsActive.Accept(&xPrinter);
+	std::string sOrigLangsText = xPrinter.CStr();
+
 	// get the <Languages> element from each
 	tinyxml2::XMLElement* pElLanguagesModel = oDocLangsModel.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
 	if (!pElLanguagesModel) {
@@ -1199,7 +1214,9 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 					first = false;
 				}
 
-				pSearchKeywordActive->ToElement()->SetText(sUpdatedKeywords.c_str());
+				// only run ->SetText if the list is non-empty (to avoid <Keywords name="xyz"></Keywords> replacing the better <Keywords name="xyz" />
+				if (sUpdatedKeywords != "")
+					pSearchKeywordActive->ToElement()->SetText(sUpdatedKeywords.c_str());
 			}
 
 			// move to next <Keywords> or comment
@@ -1213,8 +1230,13 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	// Once done, sort the languages
 	_sortLanguagesByName(pElLanguagesActive);
 
-	// save
-	oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
+	// save only if needed: use the saved copy of the XML text compared to the updated text
+	xPrinter.ClearBuffer();
+	oDocLangsActive.Accept(&xPrinter);
+	std::string sNewLangsText = xPrinter.CStr();
+
+	if (sNewLangsText != sOrigLangsText)
+		oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
 
 	// Update progress bar
 	custatus_SetProgress(99);
