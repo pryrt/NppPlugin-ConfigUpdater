@@ -23,9 +23,6 @@ private:
 	// internal attributes
 	HANDLE _hOutConsoleFile = 0;																				// stores filehandle for plugin console output
 	UINT_PTR _uOutBufferID = 0;																					// stores BufferID for plugin output
-	std::wstring _wsSavedComment;																				// TODO: stores TopLevel comment, if needed
-	bool _bHasTopLevelComment;																					// TODO: tracks TopLevel comment, if needed
-	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
 	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
 
 	// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the handle 
