@@ -38,6 +38,12 @@ private:
 	void _consoleWrite(LPCSTR cStr);
 	void _consoleWrite(tinyxml2::XMLNode* pNode);
 
+	// timestamp the console
+	void _consoleTimestamp(void);
+
+	// truncate the console (don't want ConfigUpdater.log getting thousands of lines long over time)
+	void _consoleTruncate(void);
+
 	void _initInternalState(void);																													// sets internal attributes back to default
 	void _createPluginSettingsIfNeeded(void);																										// creates the plugin's config file if it dooesn't exist
 	void _deleteOldFileIfNeeded(std::wstring fname);																								// Deletes the old-location file (settings or logfile) if it exists
