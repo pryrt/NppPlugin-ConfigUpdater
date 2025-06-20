@@ -2,12 +2,13 @@
 extern NppData nppData;
 
 // delete null characters from padded wstrings				// private function (invisible to outside world)
-void delNull(std::wstring& str)
+std::wstring delNull(std::wstring& str)
 {
 	const auto pos = str.find(L'\0');
 	if (pos != std::wstring::npos) {
 		str.erase(pos);
 	}
+	return str;
 };
 
 // convert wstring to UTF8-encoded bytes in std::string		// private function (invisible to outside world)
@@ -247,8 +248,13 @@ HANDLE ConfigUpdater::_consoleCheck()
 		FILE_ATTRIBUTE_NORMAL,						// normal file
 		NULL);										// no attr template
 	if (hConsoleFile == INVALID_HANDLE_VALUE) {
-		std::wstring errmsg = L"Error when trying to create/append \"" + wsConsoleFilePath + L"\": " + std::to_wstring(GetLastError()) + L"\n";
+		DWORD errorCode = GetLastError();
+		LPWSTR messageBuffer = nullptr;
+		FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+			nullptr, errorCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
+		std::wstring errmsg = L"Error when trying to create/append \"" + wsConsoleFilePath + L"\": " + std::to_wstring(errorCode) + L":\n" + messageBuffer + L"\n";
 		::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
+		LocalFree(messageBuffer);
 		return nullptr;
 	}
 
@@ -287,12 +293,12 @@ HANDLE ConfigUpdater::_consoleCheck()
 // Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change/error, "^--- "=message
 void ConfigUpdater::_consoleWrite(std::wstring wsStr)
 {
-	std::string msg = wstring_to_utf8(wsStr) + "\n";
+	std::string msg = wstring_to_utf8(wsStr) + "\r\n";
 	_consoleWrite(msg.c_str());
 }
 void ConfigUpdater::_consoleWrite(std::string sStr)
 {
-	std::string msg = sStr + "\n";
+	std::string msg = sStr + "\r\n";
 	_consoleWrite(msg.c_str());
 }
 void ConfigUpdater::_consoleWrite(LPCWSTR wcStr)
@@ -469,20 +475,85 @@ void ConfigUpdater::_populateNppDirs(void)
 	return;
 }
 
+// timestamp the console
+void ConfigUpdater::_consoleTimestamp(void)
+{
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+
+	wchar_t date_str[256], time_str[256];
+
+	GetDateFormat(LOCALE_USER_DEFAULT, DATE_LONGDATE, &st, nullptr, date_str, 256);
+	GetTimeFormat(LOCALE_USER_DEFAULT, 0, &st, nullptr, time_str, 256);
+
+	_consoleWrite(std::wstring(L"--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---"));
+	_consoleWrite(std::wstring(L"--- ConfigUpdater run at ") + std::wstring(date_str) + L" " + std::wstring(time_str));
+}
+
+// truncate the console (don't want ConfigUpdater.log getting thousands of lines long over time)
+void ConfigUpdater::_consoleTruncate(void)
+{
+	HANDLE hConsoleFile = _consoleCheck();
+	if (!hConsoleFile) return;
+
+	// Get the current scintilla
+	int which = -1;
+	::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
+	HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
+
+	// get the number of lines in the console file
+	LRESULT lineCount = ::SendMessage(curScintilla, SCI_GETLINECOUNT, 0, 0);
+	LRESULT textSize = ::SendMessage(curScintilla, SCI_GETTEXTLENGTH, 0, 0);
+
+	// truncate if too long: >400 lines means at least 4 previous runs are still stored
+	if (lineCount > 400) {
+		// search backward to the most recent timestamp: --- --- ---
+		Sci_CharacterRangeFull search_range{ textSize, 0 };	// min>max means search backwards
+		Sci_CharacterRangeFull found_range{ 0, 0 };
+		Sci_TextToFindFull search_text_obj{ search_range, "^--- ---", found_range };
+		LRESULT found_position = ::SendMessage(curScintilla, SCI_FINDTEXTFULL, SCFIND_REGEXP, reinterpret_cast<LPARAM>(&search_text_obj));
+		if (found_position != static_cast<LRESULT>(-1)) {	// if it's actually found
+			// need to close my exclusive handle on the file _before_ trying to write to it
+			CloseHandle(hConsoleFile);
+			hConsoleFile = nullptr;
+
+			// turn off monitoring, so I can edit
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
+
+			// It wasn't always done, so give it some time; unfortunately, there is nothing I can poll to make sure it's actually done, so I just have to guess. ;-(
+			Sleep(100);
+
+			// delete from position 0 to found_position (implemented as from 0 with length=found_position)
+			::SendMessage(curScintilla, SCI_DELETERANGE, 0, found_position);
+
+			// save edits
+			::SendMessage(_hwndNPP, NPPM_SAVECURRENTFILE, 0, 0);
+
+			// When I try to just enable monitoring again, future writes to hConsoleFile don't work ("open in another process"),
+			//		so need to reset by closing the file in N++; the next time I _consoleWrite() or similar, it will re-open the console file
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+
+			// need to wait until file is actually closed (I really wish there were an NPPM command that waited for File>Close to complete, instead of having to MENUCOMMAND)
+			//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdater.log; once it changes, the file is done closing, and it's safe to move on
+			wchar_t bufFileName[MAX_PATH] = L"ConfigUpdater.log";
+			std::wstring wsFileName = bufFileName;
+			while (delNull(wsFileName) == L"ConfigUpdater.log") {
+				memset(bufFileName, 0, MAX_PATH);
+				::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
+				wsFileName = bufFileName;
+			}
+
+		}
+	}
+	if(hConsoleFile)
+		CloseHandle(hConsoleFile);	// make sure the handle is closed in every _consoleXXX function
+}
+
+
 void ConfigUpdater::go(bool isIntermediateSorted)
 {
-	{
-		SYSTEMTIME st;
-		GetLocalTime(&st);
-
-		wchar_t date_str[256], time_str[256];
-
-		GetDateFormat(LOCALE_USER_DEFAULT, DATE_LONGDATE, &st, nullptr, date_str, 256);
-		GetTimeFormat(LOCALE_USER_DEFAULT, 0, &st, nullptr, time_str, 256);
-
-		_consoleWrite(std::wstring(L"--- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---"));
-		_consoleWrite(std::wstring(L"--- ConfigUpdater run at ") + std::wstring(date_str) + L" " + std::wstring(time_str));
-	}
+	_consoleTruncate();
+	_consoleTimestamp();
 	_initInternalState();
 	_readPluginSettings();
 	isIntermediateSorted |= _setting_isIntermediateSorted;
