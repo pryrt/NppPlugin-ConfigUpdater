@@ -343,9 +343,6 @@ void ConfigUpdater::_deleteOldFileIfNeeded(std::wstring fname)
 
 void ConfigUpdater::_initInternalState(void)
 {
-	_wsSavedComment = L"";
-	_bHasTopLevelComment = false;
-	//treeModel -- was an ETree::parse output object, but I'm not sure tinyxml2 needs such an intermediary... TBD
 	_mapModelDefaultColors["fgColor"] = "";
 	_mapModelDefaultColors["bgColor"] = "";
 	_doAbort = false;
@@ -669,11 +666,6 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 	// check for permissions, exit function if cannot write
 	if (!_ask_dir_permissions(themeDir)) return false;
-
-	// I don't know yet whether tinyxml2 has the TopLevelComment problem that py::xml.etree has.  I will have to watch out for that
-	// remove comment from previous call of update_stylers(), otherwise no-comment myTheme.xml would inherit comment from commented MossyLawn.xml (from .py:2024-Aug-29 bugfix)
-	_wsSavedComment = L"";
-	_bHasTopLevelComment = false;
 
 	// get the XML
 	tinyxml2::XMLDocument oStylerDoc;
