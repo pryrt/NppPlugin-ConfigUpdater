@@ -13,6 +13,8 @@
 #include "menuCmdID.h"
 #include "tinyxml2.h"
 #include "CUStatusDialog.h"
+#include <comutil.h>
+
 
 class ConfigUpdater {
 public:
@@ -24,6 +26,12 @@ private:
 	HANDLE _hOutConsoleFile = 0;																				// stores filehandle for plugin console output
 	UINT_PTR _uOutBufferID = 0;																					// stores BufferID for plugin output
 	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
+
+	// xsd contents for Theme/Styler or Langs validation
+	std::wstring _wsThemeValidatorXsdFileName;
+	std::wstring _wsLangsValidatorXsdFileName;
+	void _initThemeValidatorXSD(void);	// set the contents of the _bstr_ThemeValidatorXSD
+	void _initLangsValidatorXSD(void);	// set the contents of the _bstr_LangsValidatorXSD
 
 	// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the handle 
 	HANDLE _consoleCheck();
