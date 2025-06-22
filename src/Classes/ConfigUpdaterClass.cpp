@@ -893,6 +893,8 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 	HANDLE fhFound;
 	WIN32_FIND_DATAW infoFound;
 	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
+	if (_nppCfgThemesDir == _nppAppThemesDir)
+		themeDirs.pop_back();
 	for (auto wsDir : themeDirs) {
 		if (_doAbort) return;	// need to abort
 		if (custatus_GetInterruptFlag()) break; // exit early on CANCEL
