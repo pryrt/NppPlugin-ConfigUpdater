@@ -13,6 +13,8 @@
 #include "menuCmdID.h"
 #include "tinyxml2.h"
 #include "CUStatusDialog.h"
+#include <comutil.h>
+
 
 class ConfigUpdater {
 public:
@@ -24,6 +26,12 @@ private:
 	HANDLE _hOutConsoleFile = 0;																				// stores filehandle for plugin console output
 	UINT_PTR _uOutBufferID = 0;																					// stores BufferID for plugin output
 	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
+
+	// xsd contents for Theme/Styler or Langs validation
+	std::wstring _wsThemeValidatorXsdFileName;
+	std::wstring _wsLangsValidatorXsdFileName;
+	void _initThemeValidatorXSD(void);	// set the contents of the _bstr_ThemeValidatorXSD
+	void _initLangsValidatorXSD(void);	// set the contents of the _bstr_LangsValidatorXSD
 
 	// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the handle 
 	HANDLE _consoleCheck();
@@ -59,6 +67,7 @@ private:
 	bool _isAskRestartCancelled = false;																											// Remember whether CANCEL was chosen when asking to restart while looping through themes
 	bool _isAskRestartYes = false;																													// Remember if YES was pressed, so don't ask at end
 	bool _setting_isIntermediateSorted = false;																										// from settings file, whether or not to generate an intermediate "sorted" file, which has no additions/fixes, but is in same order as final file
+	bool _doStopValidationPester = false;																											// set this true to stop pestering the user with validation errors
 
 	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
