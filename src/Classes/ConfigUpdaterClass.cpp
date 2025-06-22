@@ -509,7 +509,110 @@ void ConfigUpdater::_initThemeValidatorXSD(void)
 // set the contents of the _bstr_LangsValidatorXSD
 void ConfigUpdater::_initLangsValidatorXSD(void)
 {
-	//_bstr_LangsValidatorXSD = R"myMultiLineXsd()myMultiLineXsd";
+	// Make sure that the config directory exists
+	if (!PathFileExists(_nppCfgPluginConfigMyDir.c_str())) {
+		BOOL stat = CreateDirectory(_nppCfgPluginConfigMyDir.c_str(), NULL);
+		if (!stat) return;	// cannot do the next checks if I cannot create it
+	}
+
+	// Define the filename variable
+	_wsLangsValidatorXsdFileName = _nppCfgPluginConfigMyDir + L"\\langs.xsd";
+
+	if (!PathFileExists(_wsLangsValidatorXsdFileName.c_str())) {
+		HANDLE hFile = CreateFile(_wsLangsValidatorXsdFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile == INVALID_HANDLE_VALUE) {
+			DWORD errNum = GetLastError();
+			LPWSTR messageBuffer = nullptr;
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+				nullptr, errNum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
+			std::wstring errmsg = L"Error when trying to create \"" + _wsLangsValidatorXsdFileName + L"\": " + std::to_wstring(errNum) + L":\n" + messageBuffer + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"XSD Error", MB_ICONERROR);
+			LocalFree(messageBuffer);
+			_wsLangsValidatorXsdFileName = L"";
+			return;
+		}
+
+		std::string sContents = R"myMultiLineXsd(<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="NotepadPlus">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Languages">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element maxOccurs="unbounded" name="Language">
+                <xs:complexType>
+                  <xs:sequence minOccurs="0">
+                    <xs:element maxOccurs="unbounded" name="Keywords">
+                      <xs:complexType>
+                        <xs:simpleContent>
+                          <xs:extension base="xs:string">
+                            <xs:attribute name="name" use="required">
+                              <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                  <xs:enumeration value="instre1"/>
+                                  <xs:enumeration value="instre2"/>
+                                  <xs:enumeration value="type1"/>
+                                  <xs:enumeration value="type2"/>
+                                  <xs:enumeration value="type3"/>
+                                  <xs:enumeration value="type4"/>
+                                  <xs:enumeration value="type5"/>
+                                  <xs:enumeration value="type6"/>
+                                  <xs:enumeration value="type7"/>
+                                  <xs:enumeration value="substyle1"/>
+                                  <xs:enumeration value="substyle2"/>
+                                  <xs:enumeration value="substyle3"/>
+                                  <xs:enumeration value="substyle4"/>
+                                  <xs:enumeration value="substyle5"/>
+                                  <xs:enumeration value="substyle6"/>
+                                  <xs:enumeration value="substyle7"/>
+                                  <xs:enumeration value="substyle8"/>
+                                </xs:restriction>
+                              </xs:simpleType>
+                            </xs:attribute>
+                          </xs:extension>
+                        </xs:simpleContent>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                  <xs:attribute name="name" type="xs:string" use="required"/>
+                  <xs:attribute name="ext" type="xs:string" use="required"/>
+                  <xs:attribute name="commentLine" type="xs:string" use="optional"/>
+                  <xs:attribute name="commentStart" type="xs:string" use="optional"/>
+                  <xs:attribute name="commentEnd" type="xs:string" use="optional"/>
+                  <xs:attribute name="tabSettings" type="xs:integer" use="optional"/>
+                  <xs:attribute name="backspaceUnindent" type="xs:string" use="optional"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+)myMultiLineXsd";
+
+		DWORD bytesWritten = 0;
+		DWORD bytesToWrite = static_cast<DWORD>(sContents.size() * sizeof(sContents[0]));
+		BOOL success = WriteFile(hFile, sContents.c_str(), bytesToWrite, &bytesWritten, NULL);
+		if (!success) {
+			DWORD errNum = GetLastError();
+			LPWSTR messageBuffer = nullptr;
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+				nullptr, errNum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
+			std::wstring errmsg = L"Error when trying to write to \"" + _wsLangsValidatorXsdFileName + L"\": " + std::to_wstring(errNum) + L":\n" + messageBuffer + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"XSD Error", MB_ICONERROR);
+			LocalFree(messageBuffer);
+			_wsLangsValidatorXsdFileName = L"";
+			CloseHandle(hFile);
+			return;
+		}
+
+		CloseHandle(hFile);
+
+	}
+
 }
 
 
@@ -910,10 +1013,14 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 	// whether we wrote it this time or not, check it for validity
 	bool isValid = ValidateXML::validate_xml(themePath.c_str(), _wsThemeValidatorXsdFileName);
-	if (!isValid) {
+	if (isValid) {
+		std::wstring msg = std::wstring(L"+ Validation: Confirmed VALID Stylers/Theme XML for ") + themePath;
+		_consoleWrite(msg);
+	}
+	else {
 		UINT64 lnum = ValidateXML::uGetValidationLineNum();
 		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + ValidateXML::wsGetValidationMessage();
-		_consoleWrite(msg);
+		_consoleWrite(std::wstring(L"! ") + msg);
 		if (!_doStopValidationPester) {
 			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
 			int ask = ::MessageBox(nullptr, msg.c_str(), L"Theme Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
@@ -1510,6 +1617,53 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 	if (sNewLangsText != sOrigLangsText)
 		oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
+
+	// whether we wrote it this time or not, check it for validity
+	bool isValid = ValidateXML::validate_xml(wsFilenameLangsActive, _wsLangsValidatorXsdFileName);
+	if (isValid) {
+		std::wstring msg = std::wstring(L"+ Validation: Confirmed VALID Langs XML for ") + wsFilenameLangsActive;
+		_consoleWrite(msg);
+	}
+	else {
+		UINT64 lnum = ValidateXML::uGetValidationLineNum();
+		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + ValidateXML::wsGetValidationMessage();
+		_consoleWrite(std::wstring(L"! ") + msg);
+		if (!_doStopValidationPester) {
+			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
+			int ask = ::MessageBox(nullptr, msg.c_str(), L"Langs.xml Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
+			switch (ask) {
+				case IDCANCEL:
+				{
+					_doAbort = true;
+					break;
+				}
+				case IDNO:
+				{
+					_doStopValidationPester = true;
+					break;
+				}
+				case IDYES:
+				{
+					// open the file
+					::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsFilenameLangsActive.c_str()));
+
+					// Get the current scintilla
+					int which = -1;
+					::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
+					HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
+
+					// go to the right line
+					if (lnum != -1)
+						::SendMessage(curScintilla, SCI_GOTOLINE, lnum - 1, 0);
+
+					// stop looping
+					_doAbort = true;
+					break;
+				}
+			}
+		}
+	}
+
 
 	// Update progress bar
 	custatus_SetProgress(99);
