@@ -1,4 +1,6 @@
 #include "ConfigUpdaterClass.h"
+#include "ValidateXML.h"
+
 extern NppData nppData;
 
 // delete null characters from padded wstrings				// private function (invisible to outside world)
@@ -346,7 +348,170 @@ void ConfigUpdater::_initInternalState(void)
 	_mapModelDefaultColors["fgColor"] = "";
 	_mapModelDefaultColors["bgColor"] = "";
 	_doAbort = false;
+	_doStopValidationPester = false;
+	_initThemeValidatorXSD();
+	_initLangsValidatorXSD();
 }
+
+// set the contents of the _bstr_ThemeValidatorXSD
+void ConfigUpdater::_initThemeValidatorXSD(void)
+{
+	// Make sure that the config directory exists
+	if (!PathFileExists(_nppCfgPluginConfigMyDir.c_str())) {
+		BOOL stat = CreateDirectory(_nppCfgPluginConfigMyDir.c_str(), NULL);
+		if (!stat) return;	// cannot do the next checks if I cannot create it
+	}
+
+	// Define the filename variable
+	_wsThemeValidatorXsdFileName = _nppCfgPluginConfigMyDir + L"\\theme.xsd";
+
+	if (!PathFileExists(_wsThemeValidatorXsdFileName.c_str())) {
+		HANDLE hFile = CreateFile(_wsThemeValidatorXsdFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile == INVALID_HANDLE_VALUE) {
+			DWORD errNum = GetLastError();
+			LPWSTR messageBuffer = nullptr;
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+				nullptr, errNum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
+			std::wstring errmsg = L"Error when trying to create \"" + _wsThemeValidatorXsdFileName + L"\": " + std::to_wstring(errNum) + L":\n" + messageBuffer + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"XSD Error", MB_ICONERROR);
+			LocalFree(messageBuffer);
+			_wsThemeValidatorXsdFileName = L"";
+			return;
+		}
+
+		std::string sContents = R"myMultiLineXsd(<?xml version="1.0" encoding="UTF-8" ?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="emptyInt"><!-- custom type: allows integer or empty string -->
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:length value="0"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType>
+        <xs:restriction base="xs:integer" />
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+  <xs:element name="NotepadPlus">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="LexerStyles" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="LexerType" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="WordsStyle" maxOccurs="unbounded">
+                      <xs:complexType>
+                        <xs:simpleContent>
+                          <xs:extension base="xs:string">
+                            <xs:attribute type="xs:string" name="name" use="required" />
+                            <xs:attribute type="xs:integer" name="styleID" use="required" />
+                            <xs:attribute type="xs:hexBinary" name="fgColor" use="optional" />
+                            <xs:attribute type="xs:hexBinary" name="bgColor" use="optional" />
+                            <xs:attribute type="xs:integer" name="colorStyle" use="optional" />
+                            <xs:attribute type="xs:string" name="fontName" use="optional" />
+                            <xs:attribute type="emptyInt" name="fontSize" use="optional" />
+                            <xs:attribute type="emptyInt" name="fontStyle" use="optional" />
+                            <xs:attribute name="keywordClass" use="optional">
+                              <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                  <xs:enumeration value="instre1" />
+                                  <xs:enumeration value="instre2" />
+                                  <xs:enumeration value="type1" />
+                                  <xs:enumeration value="type2" />
+                                  <xs:enumeration value="type3" />
+                                  <xs:enumeration value="type4" />
+                                  <xs:enumeration value="type5" />
+                                  <xs:enumeration value="type6" />
+                                  <xs:enumeration value="type7" />
+                                  <xs:enumeration value="substyle1" />
+                                  <xs:enumeration value="substyle2" />
+                                  <xs:enumeration value="substyle3" />
+                                  <xs:enumeration value="substyle4" />
+                                  <xs:enumeration value="substyle5" />
+                                  <xs:enumeration value="substyle6" />
+                                  <xs:enumeration value="substyle7" />
+                                  <xs:enumeration value="substyle8" />
+                                </xs:restriction>
+                              </xs:simpleType>
+                            </xs:attribute>
+                          </xs:extension>
+                       </xs:simpleContent>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                  <xs:attribute type="xs:string" name="name" use="required" />
+                  <xs:attribute type="xs:string" name="desc" use="required" />
+                  <xs:attribute type="xs:string" name="ext" use="required" />
+                </xs:complexType>
+                <xs:unique name="unique-WordsStyle-styleID">
+                  <xs:selector xpath="WordsStyle"/>
+                  <xs:field xpath="@styleID" />
+                </xs:unique>
+
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="GlobalStyles" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="WidgetStyle" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:attribute type="xs:string" name="name" use="required" />
+                  <xs:attribute type="xs:integer" name="styleID" use="required" />
+                  <xs:attribute type="xs:hexBinary" name="fgColor" use="optional" />
+                  <xs:attribute type="xs:hexBinary" name="bgColor" use="optional" />
+                  <xs:attribute type="xs:integer" name="colorStyle" use="optional" />
+                  <xs:attribute type="xs:string" name="fontName" use="optional" />
+                  <xs:attribute type="emptyInt" name="fontSize" use="optional" />
+                  <xs:attribute type="emptyInt" name="fontStyle" use="optional" />
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+          <xs:unique name="unique-widgetstyle-name">
+            <xs:selector xpath="WidgetStyle"/>
+            <xs:field xpath="@name" />
+          </xs:unique>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+)myMultiLineXsd";
+
+		DWORD bytesWritten = 0;
+		DWORD bytesToWrite = static_cast<DWORD>(sContents.size() * sizeof(sContents[0]));
+		BOOL success = WriteFile(hFile, sContents.c_str(), bytesToWrite, &bytesWritten, NULL);
+		if (!success) {
+			DWORD errNum = GetLastError();
+			LPWSTR messageBuffer = nullptr;
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+				nullptr, errNum, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, nullptr);
+			std::wstring errmsg = L"Error when trying to write to \"" + _wsThemeValidatorXsdFileName + L"\": " + std::to_wstring(errNum) + L":\n" + messageBuffer + L"\n";
+			::MessageBox(NULL, errmsg.c_str(), L"XSD Error", MB_ICONERROR);
+			LocalFree(messageBuffer);
+			_wsThemeValidatorXsdFileName = L"";
+			CloseHandle(hFile);
+			return;
+		}
+
+		CloseHandle(hFile);
+
+	}
+
+
+}
+
+// set the contents of the _bstr_LangsValidatorXSD
+void ConfigUpdater::_initLangsValidatorXSD(void)
+{
+	//_bstr_LangsValidatorXSD = R"myMultiLineXsd()myMultiLineXsd";
+}
+
 
 // creates the plugin's config file if it dooesn't exist
 void ConfigUpdater::_createPluginSettingsIfNeeded(void)
@@ -542,7 +707,7 @@ void ConfigUpdater::_consoleTruncate(void)
 
 		}
 	}
-	if(hConsoleFile)
+	if (hConsoleFile)
 		CloseHandle(hConsoleFile);	// make sure the handle is closed in every _consoleXXX function
 }
 
@@ -555,10 +720,10 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_readPluginSettings();
 	isIntermediateSorted |= _setting_isIntermediateSorted;
 	_updateAllThemes(isIntermediateSorted);
-	if (_doAbort) { custatus_CloseWindow(); return; }
+	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return; }
 	if (!custatus_GetInterruptFlag())
 		_updateLangs(isIntermediateSorted);
-	if (_doAbort) { custatus_CloseWindow(); return; }
+	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return; }
 	_consoleWrite(L"--- ConfigUpdater done. ---");
 	custatus_SetProgress(100);
 	custatus_AppendText(L"--- ConfigUpdater done. ---");
@@ -743,8 +908,53 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	if (sNewThemeText != sOrigThemeText)
 		oStylerDoc.SaveFile(themePath8.c_str());
 
+	// whether we wrote it this time or not, check it for validity
+	bool isValid = ValidateXML::validate_xml(themePath.c_str(), _wsThemeValidatorXsdFileName);
+	if (!isValid) {
+		UINT64 lnum = ValidateXML::uGetValidationLineNum();
+		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + ValidateXML::wsGetValidationMessage();
+		_consoleWrite(msg);
+		if (!_doStopValidationPester) {
+			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
+			int ask = ::MessageBox(nullptr, msg.c_str(), L"Theme Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
+			switch (ask) {
+				case IDCANCEL:
+				{
+					_doAbort = true;
+					break;
+				}
+				case IDNO:
+				{
+					_doStopValidationPester = true;
+					break;
+				}
+				case IDYES:
+				{
+					// open the file
+					::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(themePath.c_str()));
+
+					// Get the current scintilla
+					int which = -1;
+					::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
+					HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
+
+					// go to the right line
+					if (lnum != -1)
+						::SendMessage(curScintilla, SCI_GOTOLINE, lnum - 1, 0);
+
+					// stop looping
+					_doAbort = true;
+					break;
+				}
+			}
+		}
+	}
+
 	// Update progress bar
-	custatus_AddProgress(1);
+	if (_doAbort)
+		custatus_SetProgress(100);
+	else
+		custatus_AddProgress(1);
 
 	return true;
 }
