@@ -2,7 +2,11 @@
 #include <string>
 #include <comutil.h>
 #include <comdef.h>
+#pragma warning(push)
+#pragma warning(disable: 4192)
+// import DLL without ISequentialStream/_FILETIME exclusion warnings
 #import <msxml6.dll>
+#pragma warning(pop)
 
 // uses MSXML6 to validate XML based on XSD
 namespace ValidateXML {

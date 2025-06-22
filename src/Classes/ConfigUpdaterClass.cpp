@@ -1047,7 +1047,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 					// go to the right line
 					if (lnum != -1)
-						::SendMessage(curScintilla, SCI_GOTOLINE, lnum - 1, 0);
+						::SendMessage(curScintilla, SCI_GOTOLINE, static_cast<WPARAM>(lnum - 1), 0);
 
 					// stop looping
 					_doAbort = true;
@@ -1654,7 +1654,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 					// go to the right line
 					if (lnum != -1)
-						::SendMessage(curScintilla, SCI_GOTOLINE, lnum - 1, 0);
+						::SendMessage(curScintilla, SCI_GOTOLINE, static_cast<WPARAM>(lnum - 1), 0);
 
 					// stop looping
 					_doAbort = true;
