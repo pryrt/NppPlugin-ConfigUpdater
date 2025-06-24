@@ -65,6 +65,7 @@
     <ResourceCompile Include="..\src\Dialogs\CUStatusDialog.rc" />
     <ResourceCompile Include="..\src\ConfigUpdater.rc" />
     <ResourceCompile Include="..\src\Dialogs\AboutDialog.rc" />
+    <ResourceCompile Include="..\src\Dialogs\CUValidationDialog.rc" />
     <ResourceCompile Include="..\src\DockingFeature\goLine.rc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
