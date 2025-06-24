@@ -32,3 +32,9 @@
 #define IDC_VERSION                             1001
 #define IDC_GITHUB                              1002
 #define IDC_TINYXML2                            1003
+
+// Validation Dialog
+#define IDD_CU_VALIDATION_DLG                   106
+#define IDC_CU_VALIDATION_FILE_CBX              1601
+#define IDC_CU_VALIDATION_ERROR_LB              1602
+#define IDC_CU_VALIDATION_BTN                   1603
