@@ -21,6 +21,7 @@
 #include "menuCmdID.h"
 #include "ConfigUpdaterClass.h"
 #include "CUStatusDialog.h"
+#include "CUValidationDialog.h"
 #include "PluginVersion.h"
 #include "AboutDialog.h"
 
@@ -68,8 +69,9 @@ void commandMenuInit()
     //            bool check0nInit                // optional. Make this menu item be checked visually
     //            );
     setCommand(0, TEXT("Update Config Files"), menucall_UpdateConfigFiles , NULL, false);
-    setCommand(1, TEXT(""), NULL, NULL, false);
-    setCommand(2, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
+    setCommand(1, TEXT("Validate Config Files"), menucall_ValidateConfigFiles , NULL, false);
+    setCommand(2, TEXT(""), NULL, NULL, false);
+    setCommand(3, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
 }
 
 //
@@ -113,6 +115,12 @@ void menucall_UpdateConfigFiles()
     // isIntermediateSorted will be overridden by settings later in the flow
     bool isIntermediateSorted = false;
     oConf.go(isIntermediateSorted);
+}
+
+void menucall_ValidateConfigFiles()
+{
+    // non-modal allows to still interact with the parent
+    CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_VALIDATION_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUValidationProc, (LPARAM)NULL);
 }
 
 void menucall_AboutDlg()
