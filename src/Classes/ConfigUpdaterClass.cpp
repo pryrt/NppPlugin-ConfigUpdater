@@ -1,6 +1,7 @@
 #include "ConfigUpdaterClass.h"
 #include "ValidateXML.h"
 
+
 extern NppData nppData;
 
 // delete null characters from padded wstrings				// private function (invisible to outside world)
@@ -1014,14 +1015,14 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 		oStylerDoc.SaveFile(themePath8.c_str());
 
 	// whether we wrote it this time or not, check it for validity
-	bool isValid = ValidateXML::validate_xml(themePath.c_str(), _wsThemeValidatorXsdFileName);
-	if (isValid) {
+	ValidateXML themeValidator(themePath.c_str(), _wsThemeValidatorXsdFileName);
+	if (themeValidator.isValid()) {
 		std::wstring msg = std::wstring(L"+ Validation: Confirmed VALID Stylers/Theme XML for ") + themePath;
 		_consoleWrite(msg);
 	}
 	else {
-		UINT64 lnum = ValidateXML::uGetValidationLineNum();
-		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + ValidateXML::wsGetValidationMessage();
+		UINT64 lnum = themeValidator.uGetValidationLineNum();
+		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + themeValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
 		if (!_doStopValidationPester) {
 			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
@@ -1621,14 +1622,14 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 		oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
 
 	// whether we wrote it this time or not, check it for validity
-	bool isValid = ValidateXML::validate_xml(wsFilenameLangsActive, _wsLangsValidatorXsdFileName);
-	if (isValid) {
+	ValidateXML langsValidator(wsFilenameLangsActive, _wsLangsValidatorXsdFileName);
+	if (langsValidator.isValid()) {
 		std::wstring msg = std::wstring(L"+ Validation: Confirmed VALID Langs XML for ") + wsFilenameLangsActive;
 		_consoleWrite(msg);
 	}
 	else {
-		UINT64 lnum = ValidateXML::uGetValidationLineNum();
-		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + ValidateXML::wsGetValidationMessage();
+		UINT64 lnum = langsValidator.uGetValidationLineNum();
+		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + langsValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
 		if (!_doStopValidationPester) {
 			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
