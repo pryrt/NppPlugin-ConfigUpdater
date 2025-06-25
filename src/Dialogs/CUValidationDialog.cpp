@@ -18,6 +18,7 @@
 */
 
 #include "CUValidationDialog.h"
+#include "ConfigValidatorClass.h"
 #include <string>
 
 HWND g_hwndCUValidationDlg;
@@ -41,8 +42,8 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			////////
 			// setup all the controls before triggering dark mode
 			////////
-
-			
+			ConfigValidator oConfVal(nppData);
+			// TODO NEXT: need to use the oConfVal's vector of fname strings to populate the combobox
 
 			////////
 			// trigger darkmode
