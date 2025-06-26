@@ -16,6 +16,13 @@ public:
 	ConfigValidator(NppData& origNppData);
 	void go(bool isIntermediateSorted);
 
+	// accessors
+	std::vector<std::wstring>& getXmlNames(void) { return _xmlNames; };	// retrieve the XML Names vector
+	std::vector<std::wstring>& getXmlPaths(void) { return _xmlPaths; };	// retrieve the XML Paths vector
+	std::vector<std::wstring>& getXsdPaths(void) { return _xsdPaths; };	// retrieve the XSD Paths vector
+	HWND getNppHwnd(void) { return _npp.hwnd._nppHandle; }				// retrieve the NPP HWND
+	HWND getActiveScintilla(void) { return _hwActiveScintilla(); }		// retrieve the Active Scintilla HWND
+
 private:
 	void _populateValidationLists(void);		// create the list/mapping of XML and XSD
 	std::vector<std::wstring>	// all share the same index number, so index i of each array will be the same value
