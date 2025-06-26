@@ -23,8 +23,13 @@
 
 HWND g_hwndCUValidationDlg;
 
+void _pushed_validate_btn(HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
+
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM /*lParam*/)
 {
+	static ConfigValidator* s_pConfVal;	// private ConfigValidator
+	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr;
 	switch (uMsg)
 	{
 		case WM_INITDIALOG:
@@ -42,8 +47,22 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			////////
 			// setup all the controls before triggering dark mode
 			////////
-			ConfigValidator oConfVal(nppData);
-			// TODO NEXT: need to use the oConfVal's vector of fname strings to populate the combobox
+
+			// need to instantiate the object
+			if (!s_pConfVal) s_pConfVal = new ConfigValidator(nppData);
+
+			// and store the file combobox and error listbox handles
+			s_hwFileCbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_FILE_CBX);
+			s_hwErrLbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_ERROR_LB);
+
+			// Iterate thru the XML Names to populate the combobox
+			ComboBox_ResetContent(s_hwFileCbx);
+			for (auto xmlName : s_pConfVal->getXmlNames()) {
+				ComboBox_AddString(s_hwFileCbx, xmlName.c_str());
+			}
+
+			// Make sure Error listbox starts empty
+			ListBox_ResetContent(GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_ERROR_LB));
 
 			////////
 			// trigger darkmode
@@ -78,9 +97,41 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			{
 				case IDCANCEL:
 				{
+					// will then call WM_DESTROY, so handle full destruction of any objects then
 					EndDialog(hwndDlg, 0);
 					DestroyWindow(hwndDlg);
 					return true;
+				}
+				case IDC_CU_VALIDATION_BTN:
+				{
+					_pushed_validate_btn(s_hwErrLbx, s_pConfVal);
+					return true;
+				}
+				case IDC_CU_VALIDATION_ERROR_LB:
+				{
+					switch (HIWORD(wParam))
+					{
+						case LBN_DBLCLK:
+						{
+							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_pConfVal);
+							return true;
+						}
+						default:
+							return false;
+					}
+				}
+				case IDC_CU_VALIDATION_FILE_CBX:
+				{
+					switch (HIWORD(wParam))
+					{
+						case CBN_SELCHANGE:
+						{
+							ListBox_ResetContent(s_hwErrLbx);
+							return true;
+						}
+						default:
+							return false;
+					}
 				}
 				default:
 				{
@@ -90,6 +141,13 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 		}
 		case WM_DESTROY:
 		{
+			if (s_pConfVal) {
+				delete s_pConfVal;
+				s_pConfVal = nullptr;
+			}
+			s_hwFileCbx = nullptr;
+			s_hwErrLbx = nullptr;
+
 			EndDialog(hwndDlg, 0);
 			DestroyWindow(hwndDlg);
 			return true;
@@ -98,3 +156,52 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 	return false;
 }
 
+// private: call this routine when VALIDATE button is pushed
+void _pushed_validate_btn(HWND hwErrorList, ConfigValidator* /*pConfVal*/)
+{
+	ListBox_ResetContent(hwErrorList);
+	ListBox_AddString(hwErrorList, L"one");
+	ListBox_AddString(hwErrorList, L"two");
+	ListBox_AddString(hwErrorList, L"three");
+	// TODO: run the validator and get the entries from there, obviously
+	return;
+}
+
+// private: call this routine when ERRORLIST entry is double-clicked
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal)
+{
+	// Get the active file (index)
+	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
+	if (CB_ERR == cbCurSel) return;
+
+	// Get the active Error (index)
+	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
+	if (LB_ERR == lbCurSel) return;
+
+	// grab the mapped XML/XSD strings for the active file
+	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
+	std::wstring wsPath = (pConfVal->getXmlPaths())[cbCurSel];
+	std::wstring wsXSD = (pConfVal->getXsdPaths())[cbCurSel];
+
+	// grab the error information for the specific error item from pConfVal
+	int iErrorLine = 0;	// TODO: derive from pConfVal
+	int lenErrorMsg = ListBox_GetTextLen(hwErrorList, lbCurSel);
+	std::wstring wsErrorMsg(lenErrorMsg, L'\0');
+	ListBox_GetText(hwErrorList, lbCurSel, wsErrorMsg.data());
+
+	// navigate to file and line
+	::SendMessage(pConfVal->getNppHwnd(), NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsPath.c_str()));
+	if (iErrorLine < 0) iErrorLine = 0;
+	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine), 0);
+
+	// debug
+	std::wstring msg = L"Go to error from:\n";
+	msg += L"- Name = " + wsName + L"\n";
+	msg += L"- Path = " + wsPath + L"\n";
+	msg += L"- XSD  = " + wsXSD + L"\n";
+	msg += L"- Line = " + std::to_wstring(iErrorLine + 1) + L"\n";
+	msg += L"- Msg  = " + wsErrorMsg + L"\n";
+	::MessageBox(hwErrorList, msg.c_str(), L"DoubleClick", MB_OK);
+
+	return;
+}
