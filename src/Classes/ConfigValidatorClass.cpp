@@ -1,5 +1,7 @@
 #include "ConfigValidatorClass.h"
 #include "ValidateXML.h"
+#include "PopulateXSD.h"
+
 
 ConfigValidator::ConfigValidator(NppData& origNppData)
 {
@@ -68,7 +70,7 @@ void ConfigValidator::_populateValidationLists(void)
 	// start with stylers/themes XSD
 	std::wstring xpath = _npp.dir.cfgPluginConfigMyDir + L"\\theme.xsd";
 	if (!PathFileExists(xpath.c_str()))
-		throw std::exception("TODO: need to implement XSD populator");
+		PopulateXSD::WriteThemeXSD(xpath);
 
 	// work on stylers/themes XML
 	std::wstring fname = L"stylers.xml";
@@ -120,7 +122,7 @@ void ConfigValidator::_populateValidationLists(void)
 	// finally, langs.xml using langs.xsd
 	xpath = _npp.dir.cfgPluginConfigMyDir + L"\\langs.xsd";
 	if (!PathFileExists(xpath.c_str()))
-		throw std::exception("TODO: need to implement XSD populator");
+		PopulateXSD::WriteLangsXSD(xpath);
 	fname = L"langs.xml";
 	fpath = _npp.dir.cfg + L"\\" + fname;
 	if (PathFileExists(fpath.c_str())) {
