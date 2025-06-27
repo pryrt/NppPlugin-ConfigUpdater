@@ -19,11 +19,12 @@
 
 #include "CUValidationDialog.h"
 #include "ConfigValidatorClass.h"
+#include "ValidateXML.h"
 #include <string>
 
 HWND g_hwndCUValidationDlg;
 
-void _pushed_validate_btn(HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
+void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
 void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM /*lParam*/)
@@ -104,7 +105,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 				}
 				case IDC_CU_VALIDATION_BTN:
 				{
-					_pushed_validate_btn(s_hwErrLbx, s_pConfVal);
+					_pushed_validate_btn(s_hwFileCbx, s_hwErrLbx, s_pConfVal);
 					return true;
 				}
 				case IDC_CU_VALIDATION_ERROR_LB:
@@ -157,13 +158,37 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 }
 
 // private: call this routine when VALIDATE button is pushed
-void _pushed_validate_btn(HWND hwErrorList, ConfigValidator* /*pConfVal*/)
+void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal)
 {
+	// start with an empty listbox
 	ListBox_ResetContent(hwErrorList);
-	ListBox_AddString(hwErrorList, L"one");
-	ListBox_AddString(hwErrorList, L"two");
-	ListBox_AddString(hwErrorList, L"three");
-	// TODO: run the validator and get the entries from there, obviously
+
+	// Get the active file (index)
+	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
+	if (CB_ERR == cbCurSel) return;
+
+	// validate the active file
+	std::wstring wsPath = (pConfVal->getXmlPaths())[cbCurSel];
+	std::wstring wsXSD = (pConfVal->getXsdPaths())[cbCurSel];
+	ValidateXML oValidator(wsPath, wsXSD, true);
+
+	if (oValidator.isValid()) {
+		ListBox_AddString(hwErrorList, oValidator.wsGetValidationMessage().c_str());
+		pConfVal->vlErrorLinenums.clear();
+		pConfVal->vwsErrorReasons.clear();
+		pConfVal->vwsErrorContexts.clear();
+	}
+	else {
+		pConfVal->vlErrorLinenums = oValidator.vlGetMultiLinenums();
+		pConfVal->vwsErrorReasons = oValidator.vwsGetMultiReasons();
+		pConfVal->vwsErrorContexts = oValidator.vwsGetMultiContexts();
+		size_t nErrors = oValidator.szGetMultiNumErrors();
+		for (size_t e = 0; e < nErrors; e++) {
+			std::wstring msg = std::wstring(L"#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": " + pConfVal->vwsErrorReasons[e];
+			ListBox_AddString(hwErrorList, msg.c_str());
+		}
+	}
+
 	return;
 }
 
@@ -184,24 +209,14 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* p
 	std::wstring wsXSD = (pConfVal->getXsdPaths())[cbCurSel];
 
 	// grab the error information for the specific error item from pConfVal
-	int iErrorLine = 0;	// TODO: derive from pConfVal
-	int lenErrorMsg = ListBox_GetTextLen(hwErrorList, lbCurSel);
-	std::wstring wsErrorMsg(lenErrorMsg, L'\0');
-	ListBox_GetText(hwErrorList, lbCurSel, wsErrorMsg.data());
+	size_t nErrors = pConfVal->vlErrorLinenums.size();
+	long iErrorLine = nErrors ? pConfVal->vlErrorLinenums[lbCurSel] : 0;		// 1-based line number
+	std::wstring wsErrorMsg = nErrors ? pConfVal->vwsErrorReasons[lbCurSel] : L"SUCCESS";
 
 	// navigate to file and line
 	::SendMessage(pConfVal->getNppHwnd(), NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsPath.c_str()));
 	if (iErrorLine < 0) iErrorLine = 0;
-	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine), 0);
-
-	// debug
-	std::wstring msg = L"Go to error from:\n";
-	msg += L"- Name = " + wsName + L"\n";
-	msg += L"- Path = " + wsPath + L"\n";
-	msg += L"- XSD  = " + wsXSD + L"\n";
-	msg += L"- Line = " + std::to_wstring(iErrorLine + 1) + L"\n";
-	msg += L"- Msg  = " + wsErrorMsg + L"\n";
-	::MessageBox(hwErrorList, msg.c_str(), L"DoubleClick", MB_OK);
+	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine - 1), 0);
 
 	return;
 }

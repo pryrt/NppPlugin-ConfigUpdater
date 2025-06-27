@@ -23,6 +23,10 @@ public:
 	HWND getNppHwnd(void) { return _npp.hwnd._nppHandle; }				// retrieve the NPP HWND
 	HWND getActiveScintilla(void) { return _hwActiveScintilla(); }		// retrieve the Active Scintilla HWND
 
+	std::vector<std::wstring> vwsErrorReasons;
+	std::vector<std::wstring> vwsErrorContexts;
+	std::vector<long> vlErrorLinenums;
+
 private:
 	void _populateValidationLists(void);		// create the list/mapping of XML and XSD
 	std::vector<std::wstring>	// all share the same index number, so index i of each array will be the same value

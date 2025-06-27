@@ -14,9 +14,13 @@ public:
 	// Constructor
 	// on successful validation, set _ws_validation_message=L"OK" and _isValid to true
 	// on validation fail, set _ws_validation_message as appropriate and _isValid to false
-	ValidateXML(std::wstring wsXmlFileName, std::wstring wsXsdFileName)
+	ValidateXML(std::wstring wsXmlFileName, std::wstring wsXsdFileName, bool doMultiError = false)
 	{
 		_err_line_num = static_cast<UINT64>(-1);								// by default, no specific line number
+		_multierr_ws_context.clear();
+		_multierr_ws_reason.clear();
+		_multierr_l_linenum.clear();
+
 		HRESULT hr = CoInitialize(NULL);
 		if (FAILED(hr)) {
 			_isValid = _setstatus_validation_failed(L"CoInitialize failed", hr);
@@ -60,6 +64,12 @@ public:
 			xmlDoc->validateOnParse = VARIANT_TRUE;
 			xmlDoc->resolveExternals = VARIANT_TRUE;
 
+			if (doMultiError)
+				xmlDoc->setProperty(L"MultipleErrorMessages", VARIANT_TRUE);
+			else
+				xmlDoc->setProperty(L"MultipleErrorMessages", VARIANT_FALSE);
+
+
 			////////
 			// Load the XML file and simultaneously validate due to the options set above
 			////////
@@ -69,8 +79,23 @@ public:
 			VARIANT_BOOL isLoaded = xmlDoc->load(xmlFile);
 
 			// check validation
-			MSXML2::IXMLDOMParseErrorPtr validationError = xmlDoc->parseError;
+			MSXML2::IXMLDOMParseError2Ptr validationError = xmlDoc->parseError;
 			if ((isLoaded != VARIANT_TRUE) || (validationError->errorCode != 0)) {
+				// load the multi-error arrays if more than one is enabled
+				if(doMultiError) {
+					MSXML2::IXMLDOMParseErrorCollectionPtr pAllErrors = validationError->allErrors;
+					for (long e = 0; e < pAllErrors->length; e++) {
+						MSXML2::IXMLDOMParseError2Ptr pCurrentError = nullptr;
+						pAllErrors->get_item(e, &pCurrentError);
+						if (pCurrentError) {
+							_multierr_ws_reason.push_back(std::wstring(pCurrentError->reason));
+							_multierr_ws_context.push_back(std::wstring(pCurrentError->srcText));
+							_multierr_l_linenum.push_back(pCurrentError->line);
+						}
+					}
+				}
+
+				// per docs, the top validationError will report the first from the loop in a multi-error context, so the following will work either way
 				std::string msg = std::string(validationError->reason) + "\nLine#" + std::to_string(validationError->line) + ":\n" + std::string(validationError->srcText);
 				_isValid = _setstatus_validation_failed(L"XML validation FAILED", msg, static_cast<UINT64>(validationError->line));
 				goto ValidationCleanUp;
@@ -97,11 +122,19 @@ public:
 	std::string sGetValidationMessage(void) { return _wstring_to_utf8(_ws_validation_message); }
 	UINT64 uGetValidationLineNum(void) { return _err_line_num; }
 
+	// get the multi-results
+	std::vector<std::wstring> vwsGetMultiReasons(void) { return _multierr_ws_reason; };
+	std::vector<std::wstring> vwsGetMultiContexts(void) { return _multierr_ws_context; };
+	std::vector<long> vlGetMultiLinenums(void) { return _multierr_l_linenum; };
+	size_t szGetMultiNumErrors(void) { return _multierr_l_linenum.size(); };
 
 private:
 	bool _isValid;
 	std::wstring _ws_validation_message;
 	UINT64 _err_line_num;
+	std::vector<std::wstring> _multierr_ws_reason;
+	std::vector<std::wstring> _multierr_ws_context;
+	std::vector<long> _multierr_l_linenum;
 
 	// delete null characters from padded strings				// private function (invisible to outside world)
 	void _delNull(std::wstring& str)
