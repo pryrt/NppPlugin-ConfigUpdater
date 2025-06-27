@@ -34,6 +34,7 @@ Historically, some of the themes have had XML problems, such as two styles in th
         - If the XML is good, you will see a message to that effect, and can then choose another file:
           ![](./.validator-passed.png)
         - If the XML has problems, each line of the listbox will give a linenumber in the file where the problem exists, along with the error message.  Double-clicking on this line will open the config file to that linenumber, so that you can make changes
+          ![](./.validator-failed.png)
         - Running **Validate** again will re-validate the same file: if you have fixed all the problems, it will give you the SUCCESS message.
     - **Done** will exit the dialog with no further interaction or editing.
 
