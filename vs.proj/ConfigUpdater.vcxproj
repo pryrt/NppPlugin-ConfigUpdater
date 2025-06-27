@@ -50,6 +50,7 @@
     <ClInclude Include="..\src\NPP_DarkMode.h" />
     <ClInclude Include="..\src\PluginDefinition.h" />
     <ClInclude Include="..\src\PluginInterface.h" />
+    <ClInclude Include="..\src\PopulateXSD.h" />
     <ClInclude Include="..\src\Scintilla.h" />
     <ClInclude Include="..\src\Sci_Position.h" />
   </ItemGroup>
@@ -65,6 +66,7 @@
     <ClCompile Include="..\src\lib\tinyxml2.cpp" />
     <ClCompile Include="..\src\lib\Hyperlinks.cpp" />
     <ClCompile Include="..\src\PluginDefinition.cpp" />
+    <ClCompile Include="..\src\PopulateXSD.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\Dialogs\CUStatusDialog.rc" />
