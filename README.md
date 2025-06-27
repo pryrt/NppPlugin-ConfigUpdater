@@ -22,12 +22,13 @@ After your config files have been updated, you can exit Notepad++ and run it aga
 
 Historically, some of the themes have had XML problems, such as two styles in the same language with the same styleID value: Notepad++ silently ignores these, but then it is uncertain to the user which line of the XML actually gets used for that styleID.  Starting with v2.1 of the plugin, it will enable validation of the XML, so you can find (and solve) such problems: There are two ways of getting XML validation to occur on the XML:
 
-1. When running **Update Config Files**, the plugin will run validation on each XML after it's been updated and saved.  It will prompt you with information about the validation failure, and ask if you want to edit the file: ![](./.updater-validator.png)
+1. When running **Update Config Files**, the plugin will run validation on each XML after it's been updated and saved.  It will prompt you with information about the validation failure, and ask if you want to edit the file:
+    - ![](./.updater-validator.png)
     - **Yes**: The loop through updating the config files will stop. It will open the failing config file, to the appropriate line when possible. It will append a message to the logfile.  (That last means that the logfile, instead of the config file, might keep focus in Notepad++).
     - **No**: The loop through updating the config files will continue.  It will _not_ open this config file, and it will not ask on future validation errors, either (Essentially, this is "No to All").  It will still append a message into the logfile for this config file, and any of the remaining files that have validation errors.
     - **Cancel**: The loop through updating the config files will stop, but the plugin will _not_ open this config file.
 
-2. **Plugins > ConfigUpdater > Validate Config Files** will open a dialog:
+3. **Plugins > ConfigUpdater > Validate Config Files** will open a dialog:
     - You can choose one of the config files from the **Files** dropdown: `stylers.xml`, any of the themes, or `langs.xml`
     - Once a file is chosen, running **Validate** will validate the current file.
         - If the XML is good, you will see a message to that effect, and can then choose another file:
