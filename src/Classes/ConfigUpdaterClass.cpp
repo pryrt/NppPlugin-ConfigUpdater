@@ -354,6 +354,7 @@ void ConfigUpdater::_initInternalState(void)
 	_mapModelDefaultColors["bgColor"] = "";
 	_doAbort = false;
 	_doStopValidationPester = false;
+	_hadValidationError = false;
 	_initThemeValidatorXSD();
 	_initLangsValidatorXSD();
 }

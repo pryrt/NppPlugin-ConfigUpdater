@@ -38,3 +38,4 @@
 #define IDC_CU_VALIDATION_FILE_CBX              1601
 #define IDC_CU_VALIDATION_ERROR_LB              1602
 #define IDC_CU_VALIDATION_BTN                   1603
+#define IDC_CU_VALIDATION_MODEL_BTN             1604

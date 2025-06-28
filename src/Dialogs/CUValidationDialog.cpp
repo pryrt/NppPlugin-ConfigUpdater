@@ -24,13 +24,16 @@
 
 HWND g_hwndCUValidationDlg;
 
+void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
-void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
+std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM /*lParam*/)
 {
 	static ConfigValidator* s_pConfVal;	// private ConfigValidator
-	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr;
+	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr, s_hwModelBtn = nullptr;
+	static std::wstring s_wsModelName = L"";
 	switch (uMsg)
 	{
 		case WM_INITDIALOG:
@@ -55,6 +58,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			// and store the file combobox and error listbox handles
 			s_hwFileCbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_FILE_CBX);
 			s_hwErrLbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_ERROR_LB);
+			s_hwModelBtn = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_MODEL_BTN);
 
 			// Iterate thru the XML Names to populate the combobox
 			ComboBox_ResetContent(s_hwFileCbx);
@@ -64,6 +68,9 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 
 			// Make sure Error listbox starts empty
 			ListBox_ResetContent(s_hwErrLbx);
+
+			// Start with the *.model.xml button disabled
+			Button_Enable(s_hwModelBtn, false);
 
 			////////
 			// trigger darkmode
@@ -108,13 +115,17 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 					_pushed_validate_btn(s_hwFileCbx, s_hwErrLbx, s_pConfVal);
 					return true;
 				}
+				case IDC_CU_VALIDATION_MODEL_BTN:
+				{
+					_pushed_model_btn(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_wsModelName, s_pConfVal);
+				}
 				case IDC_CU_VALIDATION_ERROR_LB:
 				{
 					switch (HIWORD(wParam))
 					{
 						case LBN_DBLCLK:
 						{
-							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_pConfVal);
+							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_pConfVal);
 							return true;
 						}
 						default:
@@ -127,7 +138,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 					{
 						case CBN_SELCHANGE:
 						{
-							ListBox_ResetContent(s_hwErrLbx);
+							s_wsModelName = _changed_filecbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_pConfVal);
 							return true;
 						}
 						default:
@@ -204,7 +215,7 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 }
 
 // private: call this routine when ERRORLIST entry is double-clicked
-void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal)
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal)
 {
 	// Get the active file (index)
 	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
@@ -213,6 +224,8 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* p
 	// Get the active Error (index)
 	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
 	if (LB_ERR == lbCurSel) return;
+
+	// with a double-click here, it means that one of the errors is definitely selected, so safe to enable the *.model.xml button
 
 	// grab the mapped XML/XSD strings for the active file
 	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
@@ -229,5 +242,112 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* p
 	if (iErrorLine < 0) iErrorLine = 0;
 	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine - 1), 0);
 
+	// if there are no errors, disable the *.model.xml button, otherwise, it's safe to enable
+	Button_Enable(hwModelBtn, nErrors != 0);
+
 	return;
+}
+
+// private: call this routine when FILECBX entry is changed; returns model filename
+std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal)
+{
+	// Get the active file (index)
+	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
+	if (CB_ERR == cbCurSel) return L"";
+
+	// clear the Error ListBox
+	ListBox_ResetContent(hwErrorList);
+
+	// disable the model button, but set the model string based on the selected file
+	Button_Enable(hwModelBtn, false);
+	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
+	std::wstring wsModel = (wsName == L"langs.xml") ? L"langs.model.xml" : L"stylers.model.xml";	// pick the right model file
+	Button_SetText(hwModelBtn, wsModel.c_str());
+
+	// return the right *.model.xml
+	return wsModel;
+}
+
+// private: call this when the *.model.xml button is pushed
+void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal)
+{
+	// Get the active file (index)
+	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
+	if (CB_ERR == cbCurSel) return;
+
+	// Get the active Error (index) -- it might be LB_ERR if no error is selected (in which case, we'll want to go to line 1 (1-based))
+	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
+	if (LB_ERR == lbCurSel) return;
+
+	// if there are no errors, disable the *.model.xml button and exit
+	size_t nErrors = pConfVal->vlErrorLinenums.size();
+	if (!nErrors) {
+		Button_Enable(hwModelBtn, false);
+		return;
+	}
+
+	// assume that we will go to first line in model
+	size_t iModelLocation = 0;		// 0-based location in the model file
+	long iErrorLine = pConfVal->vlErrorLinenums[lbCurSel];		// 1-based line number for the XML file (_not_ the *.model.xml file)
+
+	// Because line-vs-element metadata isn't encoded with the parsed XML structure, I cannot extract the parent element's name
+	// Instead, based on the error context, I need to look for a different substring.
+	std::wstring wsContext = pConfVal->vwsErrorContexts[lbCurSel];
+	std::wstring wsModelElement = L"";
+	std::wstring wsModelAttrVal = L"";
+	bool bWantAttr = false;			// set true on the "model" searches that need to look for the a particular name="..." attribute for the given element
+	if (wsModelName == L"stylers.model.xml") {
+		//			  CONTEXT						SEARCH XML FOR							MODEL ELEMENT
+		//			- /NotepadPlus					n/a										<GlobalStyles>
+		//			- /GlobalStyles					n/a										<GlobalStyles>
+		//			- WidgetStyle					n/a										<GlobalStyles>
+		//			- /LexerStyles					n/a										<LexerStyles>
+		//			- /LexerType					<LexerType name="..."					<LexerType name="..."
+		//			- WordsStyle					<LexerType name="..."					<LexerType name="..."
+		//			- LexerType						this line								<LexerType name="..."
+		//			- <LexerStyles					n/a										<LexerStyles>
+		//			- NotepadPlus					n/a										line 1
+		//			- anything else					n/a										line 1
+		// NOTE: if I always start the search at the END of the error line, then even the "this line" searches will work right
+		if (wsContext.find(L"</NotepadPlus") != std::wstring::npos
+			|| wsContext.find(L"</GlobalStyles") != std::wstring::npos
+			|| wsContext.find(L"WidgetStyle") != std::wstring::npos
+			) {
+			wsModelElement = L"GlobalStyles";
+		}
+		else if (wsContext.find(L"LexerStyes") != std::wstring::npos) {	// whether it's the open or close of LexerStyles, want to find the start of LexerStyles in the model
+			wsModelElement = L"LexerStyles";
+		}
+		else if (wsContext.find(L"</LexerType") != std::wstring::npos
+			|| wsContext.find(L"WordsStyle") != std::wstring::npos
+			) {
+			wsModelElement = L"LexerType";
+			bWantAttr = true;
+		}
+		else if (wsContext.find(L"<LexerType") != std::wstring::npos) {
+			wsModelElement = L"LexerType";
+			bWantAttr = true;
+			1; // TODO: this one is special, and needs to search _this_ line, rather than searching backward...
+		}
+		// else: anything else just goes to first line of model file
+	}
+	else if (wsModelName == L"langs.model.xml") {
+		//			  CONTEXT						SEARCH XML FOR							MODEL ELEMENT
+	}
+
+	// now, if needed, search the active file backward for the right line
+	HWND hwSci = pConfVal->getActiveScintilla();
+	if (wsModelElement != L"") {
+		// start the search from the end of the context line
+		LRESULT iLinePos = ::SendMessage(hwSci, SCI_GETLINEENDPOSITION, iErrorLine - 1, 0);
+		::SendMessage(hwSci, SCI_SETTARGETSTART, iLinePos, 0);	// start search at the EOL
+		::SendMessage(hwSci, SCI_SETTARGETEND, 0, 0);			// search backward to position 0
+		// ::SendMessage
+		// !!TODO!!: start here
+	}
+
+
+	
+	// grab the error information for the specific error item from pConfVal
+
 }
