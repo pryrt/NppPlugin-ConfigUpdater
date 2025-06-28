@@ -114,7 +114,16 @@ void menucall_UpdateConfigFiles()
 
     // isIntermediateSorted will be overridden by settings later in the flow
     bool isIntermediateSorted = false;
-    oConf.go(isIntermediateSorted);
+    bool isRestarting = oConf.go(isIntermediateSorted);
+
+    // if staying in the current N++ instance and there were validation errors, ask if user wants to run the full validation dialog
+    if (!isRestarting && oConf.hadValidationError()) {
+        std::wstring msg = L"Found at least one XML validation error during the config-file updating.\n\nWould you like to run the full Config Validation dialog?";
+        int ask = ::MessageBox(nullptr, msg.c_str(), L"Update Validation Failed", MB_ICONWARNING | MB_YESNO);
+        if (ask == IDYES) {
+            menucall_ValidateConfigFiles();
+        }
+    }
 }
 
 void menucall_ValidateConfigFiles()

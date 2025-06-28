@@ -19,13 +19,15 @@
 class ConfigUpdater {
 public:
 	ConfigUpdater(HWND hwndNpp);
-	void go(bool isIntermediateSorted);
+	bool go(bool isIntermediateSorted);
+	bool hadValidationError(void) { return _hadValidationError; };	// returns whether or not there was at least one validation error during the configuration update
 
 private:
 	// internal attributes
 	HANDLE _hOutConsoleFile = 0;																				// stores filehandle for plugin console output
 	UINT_PTR _uOutBufferID = 0;																					// stores BufferID for plugin output
 	std::map<std::string, std::string> _mapModelDefaultColors, _mapStylerDefaultColors;							// store default colors from .model. and the active styler
+	bool _hadValidationError = false;																			// track whether there was a validation fail
 
 	// xsd contents for Theme/Styler or Langs validation
 	std::wstring _wsThemeValidatorXsdFileName;
@@ -46,7 +48,7 @@ private:
 	// timestamp the console
 	void _consoleTimestamp(void);
 
-	// truncate the console (don't want ConfigUpdater.log getting thousands of lines long over time)
+	// truncate the console (don't want ConfigUpdaterLog getting thousands of lines long over time)
 	void _consoleTruncate(void);
 
 	void _initInternalState(void);																													// sets internal attributes back to default
@@ -72,7 +74,7 @@ private:
 	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
 	bool _ask_dir_permissions(const std::wstring& path);																							// tests if writable, and asks for UAC if not
-	void _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
+	bool _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
 
 	////////////////////////////////
 	// XML Helpers
