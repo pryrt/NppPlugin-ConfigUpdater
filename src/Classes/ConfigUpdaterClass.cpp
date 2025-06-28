@@ -103,29 +103,32 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 }
 
 // tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
-void ConfigUpdater::_ask_rerun_normal(void)
+//		return value = if restarting, return true; otherwise, return false
+bool ConfigUpdater::_ask_rerun_normal(void)
 {
 	HANDLE hToken = nullptr;
 	TOKEN_ELEVATION elevation;
 	DWORD dwSize;
 
 	// don't need to ask if it's already in the midst of a restart
-	if (_isAskRestartYes) return;
+	if (_isAskRestartYes) return true;
 
 	// check for elevated
-	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return;		// if i cannot open token, no way to find out if elevated
+	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) return false;		// if i cannot open token, no way to find out if elevated
 	bool bGotInfo = GetTokenInformation(hToken, TokenElevation, &elevation, sizeof(elevation), &dwSize);
 	CloseHandle(hToken);
-	if (!bGotInfo) return;					// if i cannot get the info, no way to find out if elevated
+	if (!bGotInfo) return false;					// if i cannot get the info, no way to find out if elevated
 	std::wstring msg, ttl;
 
 	// message depends on whether it's elevated or not
 	if (elevation.TokenIsElevated) {
 		msg = L"You are running as Administrator, with elevated UAC permission, so it is a good idea to restart as a normal user.\n\nAlso, your config updates will not take effect until you restart Notepad++.\n\nWould you like to restart Notepad++ as a normal user?";
+		if (_hadValidationError) msg += L"\n\n(You had validation errors; you can say NO now and then YES when asked to validate, or run \"Plugins > Config Updater > Validate Config Files\" after restart.)";
 		ttl = L"Restart Notpead++ Normally?";
 	}
 	else {
 		msg = L"Your config updates will not take effect until you restart Notepad++.\n\nWould you like to restart Notepad++ at this time?";
+		if (_hadValidationError) msg += L"\n\n(You had validation errors; you can say NO now and then YES when asked to validate, or run \"Plugins > Config Updater > Validate Config Files\" after restart.)";
 		ttl = L"Restart Notpead++?";
 	}
 
@@ -183,10 +186,11 @@ void ConfigUpdater::_ask_rerun_normal(void)
 			CloseHandle(process);
 
 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
-			break;
+			return true;
 		}
 		case IDNO:
-			break;
+		default:
+			return false;
 	}
 
 }
@@ -239,7 +243,7 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 //		Consumer is required to CloseHandle() when done writing
 HANDLE ConfigUpdater::_consoleCheck()
 {
-	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdater.log";
+	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterLog";
 
 	// whether the file exists or not, need to open it for Append
 	HANDLE hConsoleFile = CreateFile(
@@ -317,7 +321,7 @@ void ConfigUpdater::_consoleWrite(LPCSTR cStr)
 	DWORD dwNBytesWritten = 0;
 	BOOL bWriteOK = ::WriteFile(hConsoleFile, cStr, static_cast<DWORD>(strlen(cStr)), &dwNBytesWritten, NULL);
 	if (!bWriteOK) {
-		std::wstring msg = std::wstring(L"Problem writing to ConfigUpdater.log: ") + std::to_wstring(GetLastError());
+		std::wstring msg = std::wstring(L"Problem writing to ConfigUpdaterLog: ") + std::to_wstring(GetLastError());
 		::MessageBox(_hwndNPP, msg.c_str(), L"Logging Error", MB_ICONWARNING);
 	}
 	CloseHandle(hConsoleFile);
@@ -335,7 +339,7 @@ ConfigUpdater::ConfigUpdater(HWND hwndNpp)
 	_populateNppDirs();
 	_initInternalState();
 	_createPluginSettingsIfNeeded();
-	_deleteOldFileIfNeeded(_nppCfgPluginConfigDir + L"\\ConfigUpdater.log");	// don't keep logfile if it's in the old location
+	_deleteOldFileIfNeeded(_nppCfgPluginConfigDir + L"\\ConfigUpdaterLog");	// don't keep logfile if it's in the old location
 };
 
 void ConfigUpdater::_deleteOldFileIfNeeded(std::wstring fname)
@@ -518,7 +522,7 @@ void ConfigUpdater::_consoleTimestamp(void)
 	_consoleWrite(std::wstring(L"--- ConfigUpdater run at ") + std::wstring(date_str) + L" " + std::wstring(time_str));
 }
 
-// truncate the console (don't want ConfigUpdater.log getting thousands of lines long over time)
+// truncate the console (don't want ConfigUpdaterLog getting thousands of lines long over time)
 void ConfigUpdater::_consoleTruncate(void)
 {
 	HANDLE hConsoleFile = _consoleCheck();
@@ -562,10 +566,10 @@ void ConfigUpdater::_consoleTruncate(void)
 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 
 			// need to wait until file is actually closed (I really wish there were an NPPM command that waited for File>Close to complete, instead of having to MENUCOMMAND)
-			//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdater.log; once it changes, the file is done closing, and it's safe to move on
-			wchar_t bufFileName[MAX_PATH] = L"ConfigUpdater.log";
+			//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdaterLog; once it changes, the file is done closing, and it's safe to move on
+			wchar_t bufFileName[MAX_PATH] = L"ConfigUpdaterLog";
 			std::wstring wsFileName = bufFileName;
-			while (delNull(wsFileName) == L"ConfigUpdater.log") {
+			while (delNull(wsFileName) == L"ConfigUpdaterLog") {
 				memset(bufFileName, 0, MAX_PATH);
 				::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
 				wsFileName = bufFileName;
@@ -578,7 +582,7 @@ void ConfigUpdater::_consoleTruncate(void)
 }
 
 
-void ConfigUpdater::go(bool isIntermediateSorted)
+bool ConfigUpdater::go(bool isIntermediateSorted)
 {
 	_consoleTruncate();
 	_consoleTimestamp();
@@ -586,16 +590,17 @@ void ConfigUpdater::go(bool isIntermediateSorted)
 	_readPluginSettings();
 	isIntermediateSorted |= _setting_isIntermediateSorted;
 	_updateAllThemes(isIntermediateSorted);
-	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return; }
+	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return false; }
 	if (!custatus_GetInterruptFlag())
 		_updateLangs(isIntermediateSorted);
-	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return; }
+	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return false; }
 	_consoleWrite(L"--- ConfigUpdater done. ---");
 	custatus_SetProgress(100);
 	custatus_AppendText(L"--- ConfigUpdater done. ---");
+	if (_hadValidationError)
+		_consoleWrite(L"!!! There was at least one validation error.  Recommend you run Plugins > ConfigUpdater > Validate Config Files !!!");
 	custatus_CloseWindow();
-	_ask_rerun_normal();
-	return;
+	return _ask_rerun_normal();
 }
 
 tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
@@ -786,6 +791,8 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 		UINT64 lnum = themeValidator.uGetValidationLineNum();
 		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + themeValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
+		_hadValidationError = true;
+#if 0
 		if (!_doStopValidationPester) {
 			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
 			int ask = ::MessageBox(nullptr, msg.c_str(), L"Theme Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
@@ -820,6 +827,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 				}
 			}
 		}
+#endif
 	}
 
 	// Update progress bar
@@ -1393,6 +1401,8 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 		UINT64 lnum = langsValidator.uGetValidationLineNum();
 		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + langsValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
+		_hadValidationError = true;
+#if 0
 		if (!_doStopValidationPester) {
 			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
 			int ask = ::MessageBox(nullptr, msg.c_str(), L"Langs.xml Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
@@ -1427,6 +1437,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 				}
 			}
 		}
+#endif
 	}
 
 
