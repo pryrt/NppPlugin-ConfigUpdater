@@ -63,7 +63,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			}
 
 			// Make sure Error listbox starts empty
-			ListBox_ResetContent(GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_ERROR_LB));
+			ListBox_ResetContent(s_hwErrLbx);
 
 			////////
 			// trigger darkmode
@@ -182,11 +182,22 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 		pConfVal->vlErrorLinenums = oValidator.vlGetMultiLinenums();
 		pConfVal->vwsErrorReasons = oValidator.vwsGetMultiReasons();
 		pConfVal->vwsErrorContexts = oValidator.vwsGetMultiContexts();
+		std::wstring longestText = L"";
 		size_t nErrors = oValidator.szGetMultiNumErrors();
 		for (size_t e = 0; e < nErrors; e++) {
 			std::wstring msg = std::wstring(L"#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": " + pConfVal->vwsErrorReasons[e];
 			ListBox_AddString(hwErrorList, msg.c_str());
+			if (longestText.size() < msg.size()) longestText = msg;
 		}
+
+		// allow enough scrolling for the size of the text in the active font [cf: https://stackoverflow.com/a/29041620]
+		HDC hDC = GetDC(hwErrorList);
+		HGDIOBJ hOldFont = SelectObject(hDC, (HGDIOBJ)SendMessage(hwErrorList, WM_GETFONT, 0, 0));
+		SIZE sz;
+		GetTextExtentPoint32(hDC, longestText.c_str(), static_cast<int>(longestText.size()), &sz);
+		::SendMessage(hwErrorList, LB_SETHORIZONTALEXTENT, sz.cx, 0);
+		SelectObject(hDC, hOldFont);
+		ReleaseDC(hwErrorList, hDC);
 	}
 
 	return;
