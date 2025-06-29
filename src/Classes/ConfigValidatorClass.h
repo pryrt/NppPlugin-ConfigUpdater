@@ -22,6 +22,7 @@ public:
 	std::vector<std::wstring>& getXsdPaths(void) { return _xsdPaths; };	// retrieve the XSD Paths vector
 	HWND getNppHwnd(void) { return _npp.hwnd._nppHandle; }				// retrieve the NPP HWND
 	HWND getActiveScintilla(void) { return _hwActiveScintilla(); }		// retrieve the Active Scintilla HWND
+	std::wstring getNppDir(std::wstring wsWhichDir);					// retrieve one of the directories
 
 	std::vector<std::wstring> vwsErrorReasons;
 	std::vector<std::wstring> vwsErrorContexts;

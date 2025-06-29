@@ -21,6 +21,7 @@
 #include "ConfigValidatorClass.h"
 #include "ValidateXML.h"
 #include <string>
+#include "pcjHelper.h"
 
 HWND g_hwndCUValidationDlg;
 
@@ -287,15 +288,15 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 	}
 
 	// assume that we will go to first line in model
-	size_t iModelLocation = 0;		// 0-based location in the model file
+	//size_t iModelLocation = 0;		// 0-based location in the model file
 	long iErrorLine = pConfVal->vlErrorLinenums[lbCurSel];		// 1-based line number for the XML file (_not_ the *.model.xml file)
 
 	// Because line-vs-element metadata isn't encoded with the parsed XML structure, I cannot extract the parent element's name
 	// Instead, based on the error context, I need to look for a different substring.
 	std::wstring wsContext = pConfVal->vwsErrorContexts[lbCurSel];
-	std::wstring wsModelElement = L"";
-	std::wstring wsModelAttrVal = L"";
-	bool bWantAttr = false;			// set true on the "model" searches that need to look for the a particular name="..." attribute for the given element
+	std::string sLocalSearch = "";
+	std::string sModelSearch = "";
+	int bWantAttr = 0;			// set to the offset for the _quoted_ attribute on the "model" searches that need to look for the a particular name="..." attribute for the given element
 	if (wsModelName == L"stylers.model.xml") {
 		//			  CONTEXT						SEARCH XML FOR							MODEL ELEMENT
 		//			- /NotepadPlus					n/a										<GlobalStyles>
@@ -313,41 +314,99 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			|| wsContext.find(L"</GlobalStyles") != std::wstring::npos
 			|| wsContext.find(L"WidgetStyle") != std::wstring::npos
 			) {
-			wsModelElement = L"GlobalStyles";
+			sLocalSearch = "<GlobalStyles";
 		}
 		else if (wsContext.find(L"LexerStyes") != std::wstring::npos) {	// whether it's the open or close of LexerStyles, want to find the start of LexerStyles in the model
-			wsModelElement = L"LexerStyles";
+			sLocalSearch = "<LexerStyles";
 		}
 		else if (wsContext.find(L"</LexerType") != std::wstring::npos
 			|| wsContext.find(L"WordsStyle") != std::wstring::npos
+			|| wsContext.find(L"<LexerType") != std::wstring::npos
 			) {
-			wsModelElement = L"LexerType";
-			bWantAttr = true;
-		}
-		else if (wsContext.find(L"<LexerType") != std::wstring::npos) {
-			wsModelElement = L"LexerType";
-			bWantAttr = true;
-			1; // TODO: this one is special, and needs to search _this_ line, rather than searching backward...
+			sLocalSearch = "<LexerType name=\"[^\"]*\"";
+			sModelSearch = "<LexerType name=";
+			bWantAttr = 16;
 		}
 		// else: anything else just goes to first line of model file
 	}
 	else if (wsModelName == L"langs.model.xml") {
 		//			  CONTEXT						SEARCH XML FOR							MODEL ELEMENT
+
+		// !!TODO!!
 	}
 
 	// now, if needed, search the active file backward for the right line
 	HWND hwSci = pConfVal->getActiveScintilla();
-	if (wsModelElement != L"") {
+	HWND hwNpp = pConfVal->getNppHwnd();
+	LRESULT deltaPos = 0;
+	if (sLocalSearch != "") {
+		// DEBUG: what file is actually open?
+		std::wstring wsWhatFilename(MAX_PATH, L'\0');
+		::SendMessage(hwNpp, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(wsWhatFilename.data()));
+
 		// start the search from the end of the context line
-		LRESULT iLinePos = ::SendMessage(hwSci, SCI_GETLINEENDPOSITION, iErrorLine - 1, 0);
-		::SendMessage(hwSci, SCI_SETTARGETSTART, iLinePos, 0);	// start search at the EOL
-		::SendMessage(hwSci, SCI_SETTARGETEND, 0, 0);			// search backward to position 0
-		// ::SendMessage
-		// !!TODO!!: start here
+		WPARAM iPosEOL = ::SendMessage(hwSci, SCI_GETLINEENDPOSITION, iErrorLine - 1, 0);
+		::SendMessage(hwSci, SCI_SETTARGETSTART, iPosEOL, 0);			// start search at the EOL
+		::SendMessage(hwSci, SCI_SETTARGETEND, 0, 0);					// search backward to position 0
+		::SendMessage(hwSci, SCI_SETSEARCHFLAGS, SCFIND_REGEXP, 0);		// scintilla regexp
+		LRESULT iSearchResult = ::SendMessageA(hwSci, SCI_SEARCHINTARGET, sLocalSearch.size(), reinterpret_cast<LPARAM>(sLocalSearch.c_str()));
+		std::string attributeValue = "";
+
+		// scroll to the range, including both iSearchResult and iPosEOL (with iPosEOL taking precedence)
+		if (iSearchResult != static_cast<LRESULT>(-1)) {
+			::SendMessage(hwSci, SCI_SCROLLRANGE, iSearchResult, iPosEOL);
+			deltaPos = iPosEOL - iSearchResult;
+		}
+
+		// model search will either be prefix + attribute value, or just the same search term
+		if (iSearchResult && bWantAttr) {
+			char buf[MAX_PATH] = { 0 };
+			::SendMessage(hwSci, SCI_GETTARGETTEXT, 0, reinterpret_cast<LPARAM>(buf));
+			attributeValue = &buf[bWantAttr];
+			sModelSearch += std::string(attributeValue);
+			pcjHelper::delNull(sModelSearch);
+		}
+		else {
+			sModelSearch = sLocalSearch;
+		}
 	}
 
+	// figure out which view is active
+	LRESULT iCurView = ::SendMessage(hwNpp, NPPM_GETCURRENTVIEW, 0, 0);
 
-	
-	// grab the error information for the specific error item from pConfVal
+	// open the *.model.xml into the _other_ view
+	std::wstring wsModelPath = pConfVal->getNppDir(L"app") + L"\\" + wsModelName;
+	if (::SendMessage(hwNpp, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsModelPath.c_str()))) {
+		LRESULT iModelView = ::SendMessage(hwNpp, NPPM_GETCURRENTVIEW, 0, 0);
+		if (iModelView == iCurView) {
+			::SendMessage(hwNpp, NPPM_MENUCOMMAND, 0, IDM_VIEW_GOTO_ANOTHER_VIEW);
+		}
+
+		// search for the right location in *.model.xml
+		HWND hwModelSci = pConfVal->getActiveScintilla();
+
+		if (sModelSearch != "") {
+			WPARAM iPosEOLModel = ::SendMessage(hwModelSci, SCI_GETLINEENDPOSITION, iErrorLine - 1, 0);
+			::SendMessage(hwModelSci, SCI_SETTARGETSTART, 0, 0);
+			::SendMessage(hwModelSci, SCI_SETTARGETEND, iPosEOLModel, 0);
+			::SendMessage(hwModelSci, SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE, 0);
+			LRESULT iModelResultPos = ::SendMessageA(hwModelSci, SCI_SEARCHINTARGET, sModelSearch.size(), reinterpret_cast<LPARAM>(sModelSearch.c_str()));
+			::SendMessage(hwModelSci, SCI_GOTOPOS, iModelResultPos, 0);
+			if (deltaPos) {
+				// start about the same distance below the current tag as was in the main XML
+				LRESULT iSecondary = iModelResultPos + deltaPos;
+				// figure out which line it was on
+				LRESULT iLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iSecondary, 0);
+				// and make sure that the _beginning_ of that line (not middle or end) is the secondary
+				iSecondary = ::SendMessage(hwModelSci, SCI_POSITIONFROMLINE, iLine, 0);
+				// then scroll to that... so that it will hopefully be scrolled all the way left...
+				::SendMessage(hwModelSci, SCI_SCROLLRANGE, iSecondary, iModelResultPos);
+			}
+		}
+		else {
+			::SendMessage(hwModelSci, SCI_GOTOPOS, 0, 0);
+		}
+
+	}
 
 }

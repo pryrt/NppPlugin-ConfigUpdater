@@ -1,46 +1,14 @@
 #include "ConfigUpdaterClass.h"
 #include "ValidateXML.h"
 #include "PopulateXSD.h"
+#include "pcjHelper.h"
 
 extern NppData nppData;
-
-// delete null characters from padded wstrings				// private function (invisible to outside world)
-std::wstring delNull(std::wstring& str)
-{
-	const auto pos = str.find(L'\0');
-	if (pos != std::wstring::npos) {
-		str.erase(pos);
-	}
-	return str;
-};
-
-// convert wstring to UTF8-encoded bytes in std::string		// private function (invisible to outside world)
-std::string wstring_to_utf8(std::wstring& wstr)
-{
-	if (wstr.empty()) return std::string();
-	int szNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), NULL, 0, NULL, NULL);
-	if (szNeeded == 0) return std::string();
-	std::string str(szNeeded, '\0');
-	int result = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), const_cast<LPSTR>(str.data()), szNeeded, NULL, NULL);
-	if (result == 0) return std::string();
-	return str;
-}
-
-std::wstring utf8_to_wstring(std::string& str)
-{
-	if (str.empty()) return std::wstring();
-	int szNeeded = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), NULL, 0);
-	if (szNeeded == 0) return std::wstring();
-	std::wstring wstr(szNeeded, L'\0');
-	int result = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), const_cast<LPWSTR>(wstr.data()), szNeeded);
-	if (result == 0) return std::wstring();
-	return wstr;
-}
 
 bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 {
 	std::wstring tmpFileName = path;
-	delNull(tmpFileName);
+	pcjHelper::delNull(tmpFileName);
 	tmpFileName += L"\\~$TMPFILE.PRYRT";
 
 	HANDLE hFile = CreateFile(tmpFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -200,16 +168,16 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 	// first try the system TEMP
 	std::wstring tempDir(MAX_PATH + 1, L'\0');
 	GetTempPath(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
-	delNull(tempDir);
+	pcjHelper::delNull(tempDir);
 
 	// if that fails, try c:\tmp or c:\temp
 	if (!_is_dir_writable(tempDir)) {
 		tempDir = L"c:\\temp";
-		delNull(tempDir);
+		pcjHelper::delNull(tempDir);
 	}
 	if (!_is_dir_writable(tempDir)) {
 		tempDir = L"c:\\tmp";
-		delNull(tempDir);
+		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, try the %USERPROFILE%
@@ -220,14 +188,14 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 			::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
 			return L"";
 		}
-		delNull(tempDir);
+		pcjHelper::delNull(tempDir);
 	}
 
 	// last try: current directory
 	if (!_is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		GetCurrentDirectory(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
-		delNull(tempDir);
+		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, no other ideas
@@ -300,7 +268,7 @@ HANDLE ConfigUpdater::_consoleCheck()
 // Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change/error, "^--- "=message
 void ConfigUpdater::_consoleWrite(std::wstring wsStr)
 {
-	std::string msg = wstring_to_utf8(wsStr) + "\r\n";
+	std::string msg = pcjHelper::wstring_to_utf8(wsStr) + "\r\n";
 	_consoleWrite(msg.c_str());
 }
 void ConfigUpdater::_consoleWrite(std::string sStr)
@@ -389,7 +357,7 @@ void ConfigUpdater::_createPluginSettingsIfNeeded(void)
 {
 	std::wstring wsPluginConfigOld = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
 	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
-	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
+	std::string sPluginConfigFile8 = pcjHelper::wstring_to_utf8(wsPluginConfigFile);
 
 	// Make sure that the config directory exists
 	if (!PathFileExists(_nppCfgPluginConfigMyDir.c_str())) {
@@ -430,7 +398,7 @@ void ConfigUpdater::_createPluginSettingsIfNeeded(void)
 void ConfigUpdater::_readPluginSettings(void)
 {
 	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
-	std::string sPluginConfigFile8 = wstring_to_utf8(wsPluginConfigFile);
+	std::string sPluginConfigFile8 = pcjHelper::wstring_to_utf8(wsPluginConfigFile);
 
 	_createPluginSettingsIfNeeded();
 
@@ -461,7 +429,7 @@ void ConfigUpdater::_populateNppDirs(void)
 	LRESULT sz = 1 + ::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, 0, NULL);
 	std::wstring pluginCfgDir(sz, '\0');
 	::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, sz, reinterpret_cast<LPARAM>(pluginCfgDir.data()));
-	delNull(pluginCfgDir);
+	pcjHelper::delNull(pluginCfgDir);
 	_nppCfgPluginConfigDir = pluginCfgDir;
 	_nppCfgPluginConfigMyDir = pluginCfgDir + L"\\ConfigUpdater";
 
@@ -469,13 +437,13 @@ void ConfigUpdater::_populateNppDirs(void)
 	//		since it's removing the tail, it will never be longer than pluginCfgDir; since it's in-place, initialize with the first
 	std::wstring pluginDir = pluginCfgDir;
 	PathCchRemoveFileSpec(const_cast<PWSTR>(pluginDir.data()), pluginCfgDir.size());
-	delNull(pluginDir);
+	pcjHelper::delNull(pluginDir);
 
 	// %AppData%\Notepad++ or equiv is what I'm really looking for
 	// _nppCfgDir				#py# _nppConfigDirectory = os.path.dirname(os.path.dirname(notepad.getPluginConfigDir()))
 	_nppCfgDir = pluginDir;
 	PathCchRemoveFileSpec(const_cast<PWSTR>(_nppCfgDir.data()), pluginDir.size());
-	delNull(_nppCfgDir);
+	pcjHelper::delNull(_nppCfgDir);
 
 	// _nppCfgUdlDir			#py# _nppCfgUdlDirectory = os.path.join(_nppConfigDirectory, 'userDefineLangs')
 	_nppCfgUdlDir = _nppCfgDir + L"\\userDefineLangs";
@@ -490,7 +458,7 @@ void ConfigUpdater::_populateNppDirs(void)
 	// _nppCfgAutoCompletionDir	#py# _nppAppAutoCompletionDirectory = os.path.join(notepad.getNppDir(), 'autoCompletion')
 	std::wstring exeDir(MAX_PATH, '\0');
 	::SendMessage(_hwndNPP, NPPM_GETNPPDIRECTORY, MAX_PATH, reinterpret_cast<LPARAM>(exeDir.data()));
-	delNull(exeDir);
+	pcjHelper::delNull(exeDir);
 	_nppCfgAutoCompletionDir = exeDir + L"\\autoCompletion";
 
 	// also, want to save the app directory and the themes relative to the app (because themes can be found in _both_ locations)
@@ -501,7 +469,7 @@ void ConfigUpdater::_populateNppDirs(void)
 	std::wstring exePath(MAX_PATH, '\0');
 	LRESULT szExe = ::SendMessage(_hwndNPP, NPPM_GETNPPFULLFILEPATH, 0, reinterpret_cast<LPARAM>(exePath.data()));
 	if (szExe) {
-		delNull(exePath);
+		pcjHelper::delNull(exePath);
 		_nppExePath = exePath;
 	}
 
@@ -570,7 +538,7 @@ void ConfigUpdater::_consoleTruncate(void)
 			//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdaterLog; once it changes, the file is done closing, and it's safe to move on
 			wchar_t bufFileName[MAX_PATH] = L"ConfigUpdaterLog";
 			std::wstring wsFileName = bufFileName;
-			while (delNull(wsFileName) == L"ConfigUpdaterLog") {
+			while (pcjHelper::delNull(wsFileName) == L"ConfigUpdaterLog") {
 				memset(bufFileName, 0, MAX_PATH);
 				::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
 				wsFileName = bufFileName;
@@ -609,8 +577,8 @@ tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
 	tinyxml2::XMLDocument* pDoc = new tinyxml2::XMLDocument;
 	std::wstring fName = std::wstring(MAX_PATH, L'\0');
 	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
-	delNull(fName);
-	tinyxml2::XMLError eResult = pDoc->LoadFile(wstring_to_utf8(fName).c_str());
+	pcjHelper::delNull(fName);
+	tinyxml2::XMLError eResult = pDoc->LoadFile(pcjHelper::wstring_to_utf8(fName).c_str());
 	if (_xml_check_result(eResult, pDoc, fName)) return pDoc;
 	if (pDoc->RootElement() == NULL) {
 		_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, pDoc);
@@ -693,10 +661,10 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
 {
 	// get full path to file
-	delNull(themeDir);
-	delNull(themeName);
+	pcjHelper::delNull(themeDir);
+	pcjHelper::delNull(themeName);
 	std::wstring themePath = themeDir + L"\\" + themeName;
-	std::string themePath8 = wstring_to_utf8(themePath);
+	std::string themePath8 = pcjHelper::wstring_to_utf8(themePath);
 	_consoleWrite(std::wstring(L"--- Checking Styler/Theme File: '") + themePath + L"'");
 
 	// update the status dialog
@@ -1204,8 +1172,8 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	custatus_SetProgress(80);
 
 	// Prepare the filenames
-	std::string sFilenameLangsModel = wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
-	std::string sFilenameLangsActive = wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
+	std::string sFilenameLangsModel = pcjHelper::wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
+	std::string sFilenameLangsActive = pcjHelper::wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
 	std::wstring wsFilenameLangsModel = _nppAppDir + L"\\langs.model.xml";
 	std::wstring wsFilenameLangsActive = _nppCfgDir + L"\\langs.xml";
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");

@@ -151,3 +151,19 @@ HWND ConfigValidator::_hwActiveScintilla(void)
 	::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
 	return (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
 }
+
+// retrieve one of the directories
+std::wstring ConfigValidator::getNppDir(std::wstring wsWhichDir)
+{
+	if (wsWhichDir == L"app") return _npp.dir.app;
+	if (wsWhichDir == L"appExe") return _npp.dir.appExePath;
+	if (wsWhichDir == L"appThemes") return _npp.dir.appThemes;
+	if (wsWhichDir == L"cfg") return _npp.dir.cfg;
+	if (wsWhichDir == L"cfgAutoCompletion") return _npp.dir.cfgAutoCompletion;
+	if (wsWhichDir == L"cfgFunctionList") return _npp.dir.cfgFunctionList;
+	if (wsWhichDir == L"cfgPluginConfig") return _npp.dir.cfgPluginConfig;
+	if (wsWhichDir == L"cfgPluginConfigMyDir") return _npp.dir.cfgPluginConfigMyDir;
+	if (wsWhichDir == L"cfgThemes") return _npp.dir.cfgThemes;
+	if (wsWhichDir == L"cfgUdl") return _npp.dir.cfgUdl;
+	return L"";
+}
