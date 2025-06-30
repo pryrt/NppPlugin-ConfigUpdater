@@ -291,6 +291,11 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 	//size_t iModelLocation = 0;		// 0-based location in the model file
 	long iErrorLine = pConfVal->vlErrorLinenums[lbCurSel];		// 1-based line number for the XML file (_not_ the *.model.xml file)
 
+	// make sure the error-XML file is active
+	std::wstring wsPath = (pConfVal->getXmlPaths())[cbCurSel];
+	::SendMessage(pConfVal->getNppHwnd(), NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsPath.c_str()));
+	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine - 1), 0);
+
 	// Because line-vs-element metadata isn't encoded with the parsed XML structure, I cannot extract the parent element's name
 	// Instead, based on the error context, I need to look for a different substring.
 	std::wstring wsContext = pConfVal->vwsErrorContexts[lbCurSel];
@@ -338,7 +343,7 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 	// now, if needed, search the active file backward for the right line
 	HWND hwSci = pConfVal->getActiveScintilla();
 	HWND hwNpp = pConfVal->getNppHwnd();
-	LRESULT deltaPos = 0;
+	LRESULT deltaLines = 0;
 	if (sLocalSearch != "") {
 		// DEBUG: what file is actually open?
 		std::wstring wsWhatFilename(MAX_PATH, L'\0');
@@ -354,8 +359,11 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 
 		// scroll to the range, including both iSearchResult and iPosEOL (with iPosEOL taking precedence)
 		if (iSearchResult != static_cast<LRESULT>(-1)) {
-			::SendMessage(hwSci, SCI_SCROLLRANGE, iSearchResult, iPosEOL);
-			deltaPos = iPosEOL - iSearchResult;
+			//::SendMessage(hwSci, SCI_SCROLLRANGE, iSearchResult, iPosEOL);
+			LRESULT iElementLine = ::SendMessage(hwSci, SCI_LINEFROMPOSITION, iSearchResult, 0);	// figure out what line the element starts at
+			::SendMessage(hwSci, SCI_SETFIRSTVISIBLELINE, iElementLine, 0);							// set that element to the top
+			//::SendMessage(hwSci, SCI_GOTOPOS, iPosEOL, 0);											// make sure the caret is on the line with the error
+			deltaLines = iErrorLine - iElementLine;													// figure out how many lines are between the element and the error
 		}
 
 		// model search will either be prefix + attribute value, or just the same search term
@@ -392,15 +400,20 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			::SendMessage(hwModelSci, SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE, 0);
 			LRESULT iModelResultPos = ::SendMessageA(hwModelSci, SCI_SEARCHINTARGET, sModelSearch.size(), reinterpret_cast<LPARAM>(sModelSearch.c_str()));
 			::SendMessage(hwModelSci, SCI_GOTOPOS, iModelResultPos, 0);
-			if (deltaPos) {
-				// start about the same distance below the current tag as was in the main XML
-				LRESULT iSecondary = iModelResultPos + deltaPos;
-				// figure out which line it was on
-				LRESULT iLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iSecondary, 0);
-				// and make sure that the _beginning_ of that line (not middle or end) is the secondary
-				iSecondary = ::SendMessage(hwModelSci, SCI_POSITIONFROMLINE, iLine, 0);
-				// then scroll to that... so that it will hopefully be scrolled all the way left...
-				::SendMessage(hwModelSci, SCI_SCROLLRANGE, iSecondary, iModelResultPos);
+			if (deltaLines) {
+				LRESULT iElementLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iModelResultPos, 0);		// figure out what model line the element starts at
+				::SendMessage(hwModelSci, SCI_SETFIRSTVISIBLELINE, iElementLine, 0);							// set that element to the top of the model file, too
+				WPARAM iEstimatedModelLine = iElementLine + deltaLines - 1;										// move the model's caret the same number of lines down from
+				::SendMessage(hwModelSci, SCI_GOTOLINE, iEstimatedModelLine, 0);								// <do the move>
+
+				// // start about the same distance below the current tag as was in the main XML
+				// LRESULT iSecondary = iModelResultPos + deltaPos;
+				// // figure out which line it was on
+				// LRESULT iLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iSecondary, 0);
+				// // and make sure that the _beginning_ of that line (not middle or end) is the secondary
+				// iSecondary = ::SendMessage(hwModelSci, SCI_POSITIONFROMLINE, iLine, 0);
+				// // then scroll to that... so that it will hopefully be scrolled all the way left...
+				// ::SendMessage(hwModelSci, SCI_SCROLLRANGE, iSecondary, iModelResultPos);
 			}
 		}
 		else {
