@@ -336,8 +336,18 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 	}
 	else if (wsModelName == L"langs.model.xml") {
 		//			  CONTEXT						SEARCH XML FOR							MODEL ELEMENT
-
-		// !!TODO!!
+		//			- Language [no s]				<Language name=							<Language name=
+		//			- Keywords						<Language name=							<Language name=
+		//			- anything else					n/a										line 1
+		if (wsContext.find(L"</Language>") != std::wstring::npos
+			|| wsContext.find(L"<Language name=") != std::wstring::npos
+			|| wsContext.find(L"<Keywords") != std::wstring::npos
+			|| wsContext.find(L"</Keywords") != std::wstring::npos
+			) {
+			sLocalSearch = "<Language name=\"[^\"]*\"";
+			sModelSearch = "<Language name=";
+			bWantAttr = 15;
+		}
 	}
 
 	// now, if needed, search the active file backward for the right line
@@ -361,8 +371,8 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 		if (iSearchResult != static_cast<LRESULT>(-1)) {
 			//::SendMessage(hwSci, SCI_SCROLLRANGE, iSearchResult, iPosEOL);
 			LRESULT iElementLine = ::SendMessage(hwSci, SCI_LINEFROMPOSITION, iSearchResult, 0);	// figure out what line the element starts at
-			::SendMessage(hwSci, SCI_SETFIRSTVISIBLELINE, iElementLine, 0);							// set that element to the top
-			//::SendMessage(hwSci, SCI_GOTOPOS, iPosEOL, 0);											// make sure the caret is on the line with the error
+			LRESULT iVisibleLine = ::SendMessage(hwSci, SCI_VISIBLEFROMDOCLINE, iElementLine, 0);	// convert from actual line number to "visible" line number (for wrapping/folding)
+			::SendMessage(hwSci, SCI_SETFIRSTVISIBLELINE, iVisibleLine, 0);							// set that element to the top
 			deltaLines = iErrorLine - iElementLine;													// figure out how many lines are between the element and the error
 		}
 
@@ -402,7 +412,8 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			::SendMessage(hwModelSci, SCI_GOTOPOS, iModelResultPos, 0);
 			if (deltaLines) {
 				LRESULT iElementLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iModelResultPos, 0);		// figure out what model line the element starts at
-				::SendMessage(hwModelSci, SCI_SETFIRSTVISIBLELINE, iElementLine, 0);							// set that element to the top of the model file, too
+				LRESULT iVisibleLine = ::SendMessage(hwSci, SCI_VISIBLEFROMDOCLINE, iElementLine, 0);			// convert from actual line number to "visible" line number (for wrapping/folding)
+				::SendMessage(hwModelSci, SCI_SETFIRSTVISIBLELINE, iVisibleLine, 0);							// set that element to the top of the model file, too
 				WPARAM iEstimatedModelLine = iElementLine + deltaLines - 1;										// move the model's caret the same number of lines down from
 				::SendMessage(hwModelSci, SCI_GOTOLINE, iEstimatedModelLine, 0);								// <do the move>
 
