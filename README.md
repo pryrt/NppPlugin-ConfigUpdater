@@ -12,23 +12,31 @@ This plugin uses the `langs.model.xml` and `stylers.model.xml` which ship with e
 
 You can install the plugin using Notepad++'s **Plugins Admin**, or by unzipping the appropriate archive from the [latest release](https://github.com/pryrt/NppPlugin-ConfigUpdater/releases/latest), so that `ConfigUpdater.dll` ends up in the `c:\Program Files\Notepad++\plugins\ConfigUpdater\` directory (or equivalent, for your installation's location).  (The files in the `docs\` folder from the zipfile could also be extracted into `c:\Program Files\Notepad++\plugins\ConfigUpdater\docs\` directory, but that's not required).
 
-## Usage
+## Update Config Files to match model files
 
 Run **Plugins > ConfigUpdater > Update Config Files** to run the config-file updater.  It will go through your AppData langs, stylers, and themes, and also go through any themes in your installation directory, and bring in the missing or updated syntax-highlighting settings from the new version, without losing any of your customizations.  If your "normal" user doesn't have write permission for your installation directory (which often happens), it will ask if you want to restart Notepad++ in "elevated (UAC)" mode (aka, "As Admin" or "As Administrator") -- if you say **yes**, Notepad++ will be closed, and it will attempt to restart As Admin (Windows may prompt you for elevated UAC permissions); if you say **no**, it won't try to restart for that file, but it will ask you again if another file doesn't have write permission; if you **cancel**, the plugin will stop asking you to restart.  If it restarts in elevated UAC mode, you will have to run **Plugins > ConfigUpdater > Update Config Files** again to restart the process.  After it is done running, if you are in elevated UAC mode, it will ask if you want to restart Notepad++ normally (because it's not a good idea to keep Notepad++ running As Admin if you don't need it, since you can accidentally overwrite important system config files in that mode).
 
 After your config files have been updated, you can exit Notepad++ and run it again, and the updated Languages and Style Configurator settings will be in effect.
+
+## [COMING SOON] Download Newest Model Files
+
+[COMING SOON] Run **Plugins > ConfigUpdater > Download Newest Model Files** to grab the most recent `*.model.xml` from the Notepad++ repository.
+
+The model files are the files that the ConfigUpdater uses to verify which languages and styles need to be updated in your config files, so having the most-recent model files is important.
+
+When you upgrade Notepad++ using the installer, it will automatically update the installed `*.model.xml` files, so if you have a normal installation, you shouldn't need to use this action.  However, if you have a portable Notepad++, even if you have been manually grabbing the new executable and DLLs from a new portable unzip, you may have forgotten to also grab `*.model.xml` from the zipfile into your portable location -- so running this action in the ConfigUpdater plugin will remedy that.  
+
+Further, whether in installed or portable, it can sometimes be useful to grab a newer copy of the model files than were available for your version: these might reveal hidden styles for languages you already have, or newly-updated keyword lists, so if you know there have been updates to the models since you last upgraded your Notepad++, you can get your stylers, themes, and language settings ahead of the curve.
 
 ## Validation
 
 Historically, some of the themes have had XML problems, such as two styles in the same language with the same styleID value: Notepad++ silently ignores these, but then it is uncertain to the user which line of the XML actually gets used for that styleID.  Starting with v2.1 of the plugin, it will enable validation of the XML, so you can find (and solve) such problems: There are two ways of getting XML validation to occur on the XML:
 
 1. When running **Update Config Files**, the plugin will run validation on each XML after it's been updated and saved.  After it is done updating, the restart-NPP popup will let you know if there was a validation error; if so, it is recommended that you say **No** to rebooting, then allow the next prompt to launch the Validation dialog for you.  It will prompt you with information about the validation failure, and ask if you want to edit the file:
+    - ![](./.updater-validator-restart.png)
     - ![](./.updater-validator.png)
-    - **Yes**: The loop through updating the config files will stop. It will open the failing config file, to the appropriate line when possible. It will append a message to the logfile.  (That last means that the logfile, instead of the config file, might keep focus in Notepad++).
-    - **No**: The loop through updating the config files will continue.  It will _not_ open this config file, and it will not ask on future validation errors, either (Essentially, this is "No to All").  It will still append a message into the logfile for this config file, and any of the remaining files that have validation errors.
-    - **Cancel**: The loop through updating the config files will stop, but the plugin will _not_ open this config file.
 
-3. **Plugins > ConfigUpdater > Validate Config Files** will open a dialog:
+2. **Plugins > ConfigUpdater > Validate Config Files** will open a dialog:
     - You can choose one of the config files from the **Files** dropdown: `stylers.xml`, any of the themes, or `langs.xml`
     - Once a file is chosen, running **Validate** will validate the current file.
         - If the XML is good, you will see a message to that effect, and can then choose another file:
