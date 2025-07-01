@@ -22,6 +22,7 @@
 #include "ConfigUpdaterClass.h"
 #include "CUStatusDialog.h"
 #include "CUValidationDialog.h"
+#include "CUDownloadModelDialog.h"
 #include "PluginVersion.h"
 #include "AboutDialog.h"
 
@@ -69,9 +70,10 @@ void commandMenuInit()
     //            bool check0nInit                // optional. Make this menu item be checked visually
     //            );
     setCommand(0, TEXT("Update Config Files"), menucall_UpdateConfigFiles , NULL, false);
-    setCommand(1, TEXT("Validate Config Files"), menucall_ValidateConfigFiles , NULL, false);
-    setCommand(2, TEXT(""), NULL, NULL, false);
-    setCommand(3, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
+    setCommand(1, TEXT("Download Newest Model Files"), menucall_DownloadModelFiles, NULL, false);
+    setCommand(2, TEXT("Validate Config Files"), menucall_ValidateConfigFiles , NULL, false);
+    setCommand(3, TEXT(""), NULL, NULL, false);
+    setCommand(4, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
 }
 
 //
@@ -105,7 +107,7 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 //----------------------------------------------//
 //-- STEP 4. DEFINE YOUR ASSOCIATED FUNCTIONS --//
 //----------------------------------------------//
-void menucall_UpdateConfigFiles()
+void menucall_UpdateConfigFiles(void)
 {
     static ConfigUpdater oConf(nppData._nppHandle);
 
@@ -126,21 +128,21 @@ void menucall_UpdateConfigFiles()
     }
 }
 
-void menucall_ValidateConfigFiles()
+void menucall_ValidateConfigFiles(void)
 {
     // non-modal allows to still interact with the parent
     CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_VALIDATION_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUValidationProc, (LPARAM)NULL);
 }
 
-void menucall_AboutDlg()
+void menucall_DownloadModelFiles(void)
 {
-#if 1
+    // non-modal allows to still interact with the parent
+    CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_DLMODEL_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUDownloadModelProc, (LPARAM)NULL);
+}
+
+void menucall_AboutDlg(void)
+{
     // modal freezes the parent
     DialogBoxParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_ABOUTDLG), nppData._nppHandle, (DLGPROC)abtDlgProc, (LPARAM)NULL);
     return;
-#else
-    std::wstring wsTitle = std::wstring(NPP_PLUGIN_NAME) + L" v" + VERSION_WSTR;
-    std::wstring wsAbout = std::wstring(VERSION_PLUGIN_WDESC) + L"\n\n" + VERSION_WURL;
-    ::MessageBox(NULL, wsAbout.c_str(), wsTitle.c_str(), MB_OK);
-#endif
 }
