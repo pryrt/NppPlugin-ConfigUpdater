@@ -22,6 +22,7 @@
 
 std::wstring _dlmEditText = L"";
 bool _dlmInterruptFlag = false;
+WPARAM _dlmScrollWidth = 400;
 
 HWND g_hwndCUDownloadModelDlg;
 
@@ -53,7 +54,7 @@ INT_PTR CALLBACK ciDlgCUDownloadModelProc(HWND hwndDlg, UINT uMsg, WPARAM wParam
 
 			// add some text
 			cu_dl_model_ClearText();
-			cu_dl_model_AppendText(L"--- ConfigUpdater: Starting ---\r\n");
+			cu_dl_model_AppendText(L"--- ConfigUpdater: Starting Download of Newest Model Files ---\r\n");
 
 			////////
 			// trigger darkmode
@@ -112,17 +113,16 @@ void cu_dl_model_CloseWindow(void)
 void cu_dl_model_ClearText(void)
 {
 	_dlmEditText = L"";
+	_dlmScrollWidth = 400;
 }
 
 void cu_dl_model_AppendText(LPWSTR newText)
 {
-	static LRESULT _scrollWidth = 400;
-
 	// update the stored text
 	_dlmEditText += newText;
 
 	// get edit control from dialog
-	HWND hwndOutput = GetDlgItem(g_hwndCUDownloadModelDlg, IDC_CU_STAT_TEXTOUT);
+	HWND hwndOutput = GetDlgItem(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_TEXTOUT_EDITTXT);
 
 	// set the full text
 	::SendMessage(hwndOutput, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(_dlmEditText.c_str()));
@@ -132,10 +132,10 @@ void cu_dl_model_AppendText(LPWSTR newText)
 	HGDIOBJ hOldFont = SelectObject(hDC, (HGDIOBJ)SendMessage(hwndOutput, WM_GETFONT, 0, 0));
 	SIZE sz;
 	GetTextExtentPoint32(hDC, newText, static_cast<int>(wcslen(newText)), &sz);
-	if (sz.cx > _scrollWidth) {
-		_scrollWidth = sz.cx;
-		::SendMessage(hwndOutput, LB_SETHORIZONTALEXTENT, _scrollWidth, 0);
+	if (static_cast<WPARAM>(sz.cx) > _dlmScrollWidth) {
+		_dlmScrollWidth = static_cast<WPARAM>(sz.cx);
 	}
+	::SendMessage(hwndOutput, LB_SETHORIZONTALEXTENT, _dlmScrollWidth, 0);
 	SelectObject(hDC, hOldFont);
 	ReleaseDC(hwndOutput, hDC);
 
@@ -148,12 +148,12 @@ void cu_dl_model_AppendText(LPWSTR newText)
 
 void cu_dl_model_SetProgress(DWORD pct)
 {
-	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDC_CU_STAT_PROGRESS1, PBM_SETPOS, pct, 0);
+	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_PROGRESS_PB, PBM_SETPOS, pct, 0);
 }
 
 void cu_dl_model_AddProgress(DWORD pct)
 {
-	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDC_CU_STAT_PROGRESS1, PBM_DELTAPOS, pct, 0);
+	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_PROGRESS_PB, PBM_DELTAPOS, pct, 0);
 }
 
 bool cu_dl_model_GetInterruptFlag(void)
