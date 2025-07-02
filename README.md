@@ -18,13 +18,13 @@ Run **Plugins > ConfigUpdater > Update Config Files** to run the config-file upd
 
 After your config files have been updated, you can exit Notepad++ and run it again, and the updated Languages and Style Configurator settings will be in effect.
 
-## [COMING SOON] Download Newest Model Files
+## Download Newest Model Files
 
-[COMING SOON] Run **Plugins > ConfigUpdater > Download Newest Model Files** to grab the most recent `*.model.xml` from the Notepad++ repository.
+Run **Plugins > ConfigUpdater > Download Newest Model Files** to download the most recent `*.model.xml` from the Notepad++ repository (requires internet connection).
 
 The model files are the files that the ConfigUpdater uses to verify which languages and styles need to be updated in your config files, so having the most-recent model files is important.
 
-When you upgrade Notepad++ using the installer, it will automatically update the installed `*.model.xml` files, so if you have a normal installation, you shouldn't need to use this action.  However, if you have a portable Notepad++, even if you have been manually grabbing the new executable and DLLs from a new portable unzip, you may have forgotten to also grab `*.model.xml` from the zipfile into your portable location -- so running this action in the ConfigUpdater plugin will remedy that.  
+When you upgrade Notepad++ using the installer, it will automatically update the installed `*.model.xml` files, so if you have a normal installation, you shouldn't need to use this action.  However, if you have a portable Notepad++, even if you have been manually grabbing the new executable and DLLs from a new portable unzip, you may have forgotten to also grab `*.model.xml` from the zipfile into your portable location -- so running this action in the ConfigUpdater plugin will remedy that.
 
 Further, whether in installed or portable, it can sometimes be useful to grab a newer copy of the model files than were available for your version: these might reveal hidden styles for languages you already have, or newly-updated keyword lists, so if you know there have been updates to the models since you last upgraded your Notepad++, you can get your stylers, themes, and language settings ahead of the curve.
 
@@ -51,4 +51,4 @@ Historically, some of the themes have had XML problems, such as two styles in th
 
 - This plugin can be run after each time you upgrade to a new version of Notepad++, to keep your settings in sync with updates to the model versions that ship with Notepad++.
 
-- This plugin will work whether you are using a normal Notepad++ installation using AppData for you settings, or whether you have chosen Cloud Directory for your settings, or are using the `-settingsDir` command-line option, or whether you are running a portable (`doLocalConf.xml`) version of Notepad++, and should search and update the files in the correct directories in any of those circumstances.  (For it to do anything with a portable Notepad++, you have to make sure that you have copied the `*.model.xml` files from the new portable unzip into your active portable copy; if the `*.model.xml` aren't changed, ConfigUpdater won't know it has to update anything in your langs or stylers or themes.)
+- This plugin will work whether you are using a normal Notepad++ installation using AppData for you settings, or whether you have chosen Cloud Directory for your settings, or are using the `-settingsDir` command-line option, or whether you are running a portable (`doLocalConf.xml`) version of Notepad++, and should search and update the files in the correct directories in any of those circumstances.  (For it to do anything with a portable Notepad++, you have to make sure that you have copied the `*.model.xml` files from the new portable unzip into your active portable copy; if the `*.model.xml` aren't changed, ConfigUpdater won't know it has to update anything in your langs or stylers or themes; the **Download Newest Model Files** action will help you keep that up-to-date.)
