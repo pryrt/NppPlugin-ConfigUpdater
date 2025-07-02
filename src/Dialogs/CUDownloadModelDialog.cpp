@@ -122,7 +122,7 @@ void cu_dl_model_AppendText(LPWSTR newText)
 	_dlmEditText += newText;
 
 	// get edit control from dialog
-	HWND hwndOutput = GetDlgItem(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_TEXTOUT_EDITTXT);
+	HWND hwndOutput = GetDlgItem(g_hwndCUDownloadModelDlg, IDC_CU_DLMODEL_TEXTOUT_EDITTXT);
 
 	// set the full text
 	::SendMessage(hwndOutput, WM_SETTEXT, 0, reinterpret_cast<LPARAM>(_dlmEditText.c_str()));
@@ -144,16 +144,23 @@ void cu_dl_model_AppendText(LPWSTR newText)
 	while (moved) {
 		moved = ::SendMessage(hwndOutput, EM_SCROLL, SB_PAGEDOWN, 0);
 	}
+
+	// force a redraw right away
+	RedrawWindow(g_hwndCUDownloadModelDlg, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
 void cu_dl_model_SetProgress(DWORD pct)
 {
-	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_PROGRESS_PB, PBM_SETPOS, pct, 0);
+	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDC_CU_DLMODEL_PROGRESS_PB, PBM_SETPOS, pct, 0);
+	// force a redraw right away
+	RedrawWindow(g_hwndCUDownloadModelDlg, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
 void cu_dl_model_AddProgress(DWORD pct)
 {
-	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDD_CU_DLMODEL_PROGRESS_PB, PBM_DELTAPOS, pct, 0);
+	::SendDlgItemMessage(g_hwndCUDownloadModelDlg, IDC_CU_DLMODEL_PROGRESS_PB, PBM_DELTAPOS, pct, 0);
+	// force a redraw right away
+	RedrawWindow(g_hwndCUDownloadModelDlg, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 }
 
 bool cu_dl_model_GetInterruptFlag(void)

@@ -20,6 +20,7 @@
 #include "PluginDefinition.h"
 #include "menuCmdID.h"
 #include "ConfigUpdaterClass.h"
+#include "ConfigDownloaderClass.h"
 #include "CUStatusDialog.h"
 #include "CUValidationDialog.h"
 #include "CUDownloadModelDialog.h"
@@ -136,8 +137,16 @@ void menucall_ValidateConfigFiles(void)
 
 void menucall_DownloadModelFiles(void)
 {
+    // want the downloader object to stay around, so it doesn't have to re-instantiate every time the dialog is run
+    static ConfigDownloader oDownloader;
+
     // non-modal allows to still interact with the parent
     CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_DLMODEL_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUDownloadModelProc, (LPARAM)NULL);
+
+    // now that the dialog exists, can start the process
+    bool stat = oDownloader.go();
+
+    if (!stat) return;  // dummy to remind me that I've got a status available; might eventually decide to do something with the return value, but I don't know what, yet
 }
 
 void menucall_AboutDlg(void)

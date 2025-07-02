@@ -42,5 +42,5 @@
 
 // Download Models Dialog
 #define IDD_CU_DLMODEL_DLG                      107
-#define IDD_CU_DLMODEL_TEXTOUT_EDITTXT          1701
-#define IDD_CU_DLMODEL_PROGRESS_PB              1702
+#define IDC_CU_DLMODEL_TEXTOUT_EDITTXT          1701
+#define IDC_CU_DLMODEL_PROGRESS_PB              1702
