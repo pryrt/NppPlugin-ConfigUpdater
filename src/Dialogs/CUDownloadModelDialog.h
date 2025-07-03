@@ -18,13 +18,15 @@
 */
 
 #pragma once
-#define VERSION_DIGITALVALUE        2, 0, 99, 5
-#define VERSION_VALUE               "2.0.99-dev5\0"
-#define VERSION_WSTR                TEXT(VERSION_VALUE)
-#define VERSION_AUTHOR              "Peter C. Jones\0"
-#define VERSION_PLUGIN_DESCRIPTION  "Notepad++ Plugin to Keep Langs/Stylers/Themes Config Files Up-to-Date\0"
-#define VERSION_PLUGIN_WDESC        TEXT(VERSION_PLUGIN_DESCRIPTION)
-#define VERSION_COPYRIGHT           "Copyright 2025 by Peter C. Jones\0"
-#define VERSION_URL                 "https://github.com/pryrt/NppPlugin-ConfigUpdater/\0"
-#define VERSION_WURL                TEXT(VERSION_URL)
+#include <WindowsX.h>
+#include "PluginDefinition.h"
+#include "resource.h"
+#include <CommCtrl.h>
 
+INT_PTR CALLBACK ciDlgCUDownloadModelProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+void cu_dl_model_ClearText(void);
+void cu_dl_model_AppendText(LPWSTR newText);
+void cu_dl_model_SetProgress(DWORD pct);
+void cu_dl_model_AddProgress(DWORD pct);
+void cu_dl_model_CloseWindow(void);
+bool cu_dl_model_GetInterruptFlag(void);

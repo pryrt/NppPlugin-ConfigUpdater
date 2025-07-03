@@ -17,14 +17,21 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
-#define VERSION_DIGITALVALUE        2, 0, 99, 5
-#define VERSION_VALUE               "2.0.99-dev5\0"
-#define VERSION_WSTR                TEXT(VERSION_VALUE)
-#define VERSION_AUTHOR              "Peter C. Jones\0"
-#define VERSION_PLUGIN_DESCRIPTION  "Notepad++ Plugin to Keep Langs/Stylers/Themes Config Files Up-to-Date\0"
-#define VERSION_PLUGIN_WDESC        TEXT(VERSION_PLUGIN_DESCRIPTION)
-#define VERSION_COPYRIGHT           "Copyright 2025 by Peter C. Jones\0"
-#define VERSION_URL                 "https://github.com/pryrt/NppPlugin-ConfigUpdater/\0"
-#define VERSION_WURL                TEXT(VERSION_URL)
+#include <winres.h>
+#include "resource.h"
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDD_CU_DLMODEL_DLG DIALOGEX 0, 0, 419, 165
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "ConfigUpdater Status"
+FONT 10, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+EDITTEXT        IDC_CU_DLMODEL_TEXTOUT_EDITTXT, 7, 7, 395, 102, ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | WS_VSCROLL | WS_HSCROLL
+CONTROL         "", IDC_CU_DLMODEL_PROGRESS_PB, "msctls_progress32", WS_BORDER, 7, 111, 395, 12
+PUSHBUTTON      "Close", IDCANCEL, 350, 125, 52, 14
+END
