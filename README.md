@@ -47,6 +47,20 @@ Historically, some of the themes have had XML problems, such as two styles in th
     - Using the **\*.model.xml** button (which will rename to **stylers.model.xml** or **langs.model.xml** depending on the Files dropdown value) will put the model file in the other view, and will attempt to scroll both files to approximately the same location, so that you can see what the model does for that particular language, so that you can investigate the difference between the language and its model, to try to fix the error.  (Starting with Notepad++ v8.8.2, the model files will have been validated in the source repo before being distributed, so they are "known good".)
     - **Done** will exit the dialog with no further interaction or editing.
 
+### Common Validation Issues
+
+- Themes or `stylers.xml`
+    - `'#' is a duplicate key...`:
+        - _Description_: `styleID` values for all the `<WordsStyle>` entries for a given `<LexerType>` (language) **must** be unique.  If there are two `<WordsStyle>` with the same styleID, Notepad++ cannot know which entry to choose for coloring that style
+        - _Fix_: You need to either delete one of the two `<WordsStyle>` entries that have the same styleID, or you need to change one of the two styleID values to be a different number.  You can use **stylers.model.xml** to help you figure out whether you need to just delete one, or to help you figure out what the right styleID is for a given `<WordsStyle>`, by comparing the `<WordsStyle>` entry from the model file for that language that has the same styleID.
+    - `'xyz' violates enumeration constraint of 'instre1 instre2 ...'
+        - _Description_: if the `keywordClass` attribute exists, it must be one of the listed values: `instre1 instre2 type1 type2 type3 type4 type5 type6 type7 substyle1 substyle2 substyle3 substyle4 substyle5 substyle6 substyle7`.  It cannot be an empty string (so _not_ `keywordClass=""`), and it cannot be any other value.
+        - _Fix_: You either need to set the `keywordClass` attribute to one of those values, or delete the `keywordClass="..."` attribute from that `<WordsStyle>`.  You can use **stylers.model.xml** to compare the `<WordsStyle>` entry in the model that has the same styleID to the problematic line in your XML, and see whether that entry should have a `keywordClass` or not, and, if so, what value it should have.
+- `langs.xml`
+    - `'xyz' violates enumeration constraint of 'instre1 instre2 ...'
+        - _Description_: The `name` for the `<Keywords>` entry for the given language must be one of the listed values: `instre1 instre2 type1 type2 type3 type4 type5 type6 type7 substyle1 substyle2 substyle3 substyle4 substyle5 substyle6 substyle7`.  It cannot be an empty string (so _not_ `name=""`), and it cannot be any other value that wasn't listed.
+        - _Fix_: You need to set the `name` attribute to one of those values.  You can use **langs.model.xml** to compare the `<Keywords>` entry in the model that has the same entry in your XML, and see what name that `<Keywords>` element should have.
+
 ## Notes
 
 - This plugin can be run after each time you upgrade to a new version of Notepad++, to keep your settings in sync with updates to the model versions that ship with Notepad++.
