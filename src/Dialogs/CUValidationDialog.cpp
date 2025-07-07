@@ -31,7 +31,7 @@ void _sglclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn);	
 void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
 std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
 
-INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM /*lParam*/)
+INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	static ConfigValidator* s_pConfVal;	// private ConfigValidator
 	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr, s_hwModelBtn = nullptr;
@@ -157,6 +157,74 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 					return false;
 				}
 			}
+		}
+		case WM_SIZE:
+		{
+			// desired height and width
+			int newWidth = LOWORD(lParam);
+			int newHeight = HIWORD(lParam);
+
+			// update error list box size
+			RECT rectListBox;
+			GetWindowRect(s_hwErrLbx, &rectListBox);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectListBox), 2);
+			int new_w = newWidth - 30 - 10;		// 30 is gaps/border, 10 is extra
+			int new_h = newHeight - 70 - 45;	// 70=gaps+button, 45 is extra
+			int new_x = rectListBox.left;
+			int new_y = rectListBox.top;
+			MoveWindow(s_hwErrLbx, new_x, new_y, new_w, new_h, TRUE);
+
+			// update file cbox size
+			RECT rectFileCbx;
+			GetWindowRect(s_hwFileCbx, &rectFileCbx);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectFileCbx), 2);
+			new_x = rectFileCbx.left;
+			new_y = rectFileCbx.top;
+			new_w = newWidth - 30 - 10 - 25 - 18;		// 25 less than error listbox, plus extra
+			new_h = rectFileCbx.bottom - rectFileCbx.top;
+			MoveWindow(s_hwFileCbx, new_x, new_y, new_w, new_h, TRUE);
+
+			// update Validation button
+			RECT rectValidationBtn;
+			HWND hwValidationBtn = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_BTN);
+			GetWindowRect(hwValidationBtn, &rectValidationBtn);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectValidationBtn), 2);
+			new_x = rectValidationBtn.left;
+			new_y = newHeight - 50 - 11;	// 11 extra buffer
+			new_w = rectValidationBtn.right - rectValidationBtn.left;
+			new_h = rectValidationBtn.bottom - rectValidationBtn.top;
+			MoveWindow(hwValidationBtn, new_x, new_y, new_w, new_h, TRUE);
+
+			// update Model button
+			RECT rectModelBtn;
+			GetWindowRect(s_hwModelBtn, &rectModelBtn);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectModelBtn), 2);
+			new_x = rectModelBtn.left;
+			new_y = newHeight - 50 - 11;	// 11 extra buffer
+			new_w = rectModelBtn.right - rectModelBtn.left;
+			new_h = rectModelBtn.bottom - rectModelBtn.top;
+			MoveWindow(s_hwModelBtn, new_x, new_y, new_w, new_h, TRUE);
+
+			// update DONE(Cancel) button
+			RECT rectDoneBtn;
+			HWND hwDoneBtn = GetDlgItem(g_hwndCUValidationDlg, IDCANCEL);
+			GetWindowRect(hwDoneBtn, &rectDoneBtn);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectDoneBtn), 2);
+			new_x = newWidth - 60 - 10 - 55;	// w=60, gap=10, unknown=55
+			new_y = newHeight - 50 - 11;	// 11 extra buffer
+			new_w = rectDoneBtn.right - rectDoneBtn.left;
+			new_h = rectDoneBtn.bottom - rectDoneBtn.top;
+			MoveWindow(hwDoneBtn, new_x, new_y, new_w, new_h, TRUE);
+
+			return false;
+		}
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+			// Set the minimum tracking size (the smallest size the user can drag the window to)
+			lpMMI->ptMinTrackSize.x = 330 + 250; // Minimum width: don't know why using actual window dimensions (330) is not enough
+			lpMMI->ptMinTrackSize.y = 205 + 195; // Minimum height: don't know why using actual window dimensions (205) is not enough
+			return false;
 		}
 		case WM_DESTROY:
 		{
@@ -287,7 +355,6 @@ std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwMod
 	Button_Enable(hwModelBtn, false);
 	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
 	std::wstring wsModel = (wsName == L"langs.xml") ? L"langs.model.xml" : L"stylers.model.xml";	// pick the right model file
-	//Button_SetText(hwModelBtn, wsModel.c_str());
 
 	// return the right *.model.xml
 	return wsModel;
