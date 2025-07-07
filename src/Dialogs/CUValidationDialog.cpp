@@ -27,6 +27,7 @@ HWND g_hwndCUValidationDlg;
 
 void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
+void _sglclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn);	// private: call this routine when ERRORLIST entry is single-clicked
 void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
 std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
 
@@ -129,6 +130,11 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_pConfVal);
 							return true;
 						}
+						case LBN_SELCHANGE:
+						{
+							_sglclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn);
+							return true;
+						}
 						default:
 							return false;
 					}
@@ -214,6 +220,24 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 
 	return;
 }
+
+// private: call this routine when ERRORLIST entry is single-clicked
+void _sglclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn)
+{
+	// Get the active file (index)
+	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
+	if (CB_ERR == cbCurSel) return;
+
+	// Get the active Error (index)
+	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
+	if (LB_ERR == lbCurSel) return;
+
+	// with a single-click here, it means that one of the errors is definitely selected, so safe to enable the *.model.xml button
+	Button_Enable(hwModelBtn, true);
+
+	return;
+}
+
 
 // private: call this routine when ERRORLIST entry is double-clicked
 void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal)
