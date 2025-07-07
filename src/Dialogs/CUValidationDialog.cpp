@@ -287,7 +287,7 @@ std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwMod
 	Button_Enable(hwModelBtn, false);
 	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
 	std::wstring wsModel = (wsName == L"langs.xml") ? L"langs.model.xml" : L"stylers.model.xml";	// pick the right model file
-	Button_SetText(hwModelBtn, wsModel.c_str());
+	//Button_SetText(hwModelBtn, wsModel.c_str());
 
 	// return the right *.model.xml
 	return wsModel;
