@@ -25,19 +25,19 @@
 #include <commctrl.h>
 
 HWND g_hwndCUValidationDlg;
+ConfigValidator* g_pConfVal;	// private ConfigValidator object
 const UINT_PTR _uniqueSubclassID = 750118;
 
 void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
 void _sglclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn);	// private: call this routine when ERRORLIST entry is single-clicked
-void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErBrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
 std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
 static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
-
+void _copy_current_errlbx_entry(HWND hwErorList);	// copy current selected errorbox entry into clipboard (and return the value for no good reason)
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	static ConfigValidator* s_pConfVal;	// private ConfigValidator
 	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr, s_hwModelBtn = nullptr;
 	static std::wstring s_wsModelName = L"";
 	switch (uMsg)
@@ -59,7 +59,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			////////
 
 			// need to instantiate the object
-			if (!s_pConfVal) s_pConfVal = new ConfigValidator(nppData);
+			if (!g_pConfVal) g_pConfVal = new ConfigValidator(nppData);
 
 			// and store the file combobox and error listbox handles
 			s_hwFileCbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_FILE_CBX);
@@ -68,7 +68,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 
 			// Iterate thru the XML Names to populate the combobox
 			ComboBox_ResetContent(s_hwFileCbx);
-			for (auto xmlName : s_pConfVal->getXmlNames()) {
+			for (auto xmlName : g_pConfVal->getXmlNames()) {
 				ComboBox_AddString(s_hwFileCbx, xmlName.c_str());
 			}
 
@@ -89,7 +89,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			SetWindowSubclass(s_hwErrLbx, _ListBoxSubclassProc, _uniqueSubclassID, 0);
 
 			// Need to tell N++ that I want to handle shortcut keys myself
-			static_cast<BOOL>(::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGADD, reinterpret_cast<LPARAM>(hwndDlg)));
+			::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGADD, reinterpret_cast<LPARAM>(hwndDlg));
 
 			////////
 			// Finally, Find Center and then position and display the window:
@@ -124,12 +124,12 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 				}
 				case IDC_CU_VALIDATION_BTN:
 				{
-					_pushed_validate_btn(s_hwFileCbx, s_hwErrLbx, s_pConfVal);
+					_pushed_validate_btn(s_hwFileCbx, s_hwErrLbx, g_pConfVal);
 					return true;
 				}
 				case IDC_CU_VALIDATION_MODEL_BTN:
 				{
-					_pushed_model_btn(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_wsModelName, s_pConfVal);
+					_pushed_model_btn(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_wsModelName, g_pConfVal);
 				}
 				case IDC_CU_VALIDATION_ERROR_LB:
 				{
@@ -137,7 +137,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 					{
 						case LBN_DBLCLK:
 						{
-							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_pConfVal);
+							_dblclk_errorlbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, g_pConfVal);
 							return true;
 						}
 						case LBN_SELCHANGE:
@@ -155,7 +155,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 					{
 						case CBN_SELCHANGE:
 						{
-							s_wsModelName = _changed_filecbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, s_pConfVal);
+							s_wsModelName = _changed_filecbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, g_pConfVal);
 							return true;
 						}
 						default:
@@ -238,9 +238,9 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 		}
 		case WM_DESTROY:
 		{
-			if (s_pConfVal) {
-				delete s_pConfVal;
-				s_pConfVal = nullptr;
+			if (g_pConfVal) {
+				delete g_pConfVal;
+				g_pConfVal = nullptr;
 			}
 			s_hwFileCbx = nullptr;
 			s_hwErrLbx = nullptr;
@@ -543,7 +543,8 @@ static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam
 	// Check for the universal Ctrl+C signal (works on all keyboard layouts)
 	if (uMsg == WM_CHAR) {
 		if (wParam == 0x03) {
-			::MessageBox(hWnd, L"Got Ctrl+C", L"Got Ctrl+C", MB_OK); // Your function to copy text
+			_copy_current_errlbx_entry(hWnd);
+			//::MessageBox(hWnd, L"Got Ctrl+C", L"Got Ctrl+C", MB_OK); // Your function to copy text
 			return 0; // Event handled
 		}
 	}
@@ -555,4 +556,46 @@ static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam
 
 	// For all other messages, just pass them to the default handler
 	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+// copy current selected errorbox entry into clipboard (and return the value for no good reason)
+//		(unfortunately, since I cannot pass the pConfVal into the subclass proc, I cannot pass it from there into here as a paramter, so I had to change it to file global)
+void _copy_current_errlbx_entry(HWND hwErrorList)
+{
+	std::wstring msg = L"";
+	bool needFree = false;
+	HGLOBAL hGlobal = nullptr;
+
+	if (!g_pConfVal->vlErrorLinenums.size()) return;		// nothing to copy if there are no errors
+
+	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
+	if (LB_ERR == lbCurSel) return;
+
+	if (!OpenClipboard(hwErrorList)) return;
+	if (!EmptyClipboard()) goto cceeCloseAndExit;
+
+	msg = std::wstring(L"#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": " + g_pConfVal->vwsErrorReasons[lbCurSel];
+	msg += g_pConfVal->vwsErrorContexts[lbCurSel];
+
+	hGlobal = GlobalAlloc(GMEM_MOVEABLE, (msg.size() + 1) * sizeof(wchar_t));
+	if (!hGlobal) goto cceeCloseAndExit;
+	needFree = true;	// if something goes wrong after hGlobal has been allocated, need to free it
+
+	wchar_t* buffer = static_cast<wchar_t*>(GlobalLock(hGlobal));
+	if (!buffer) goto cceeCloseAndExit;
+
+	memcpy(buffer, msg.c_str(), msg.size() * sizeof(wchar_t));
+	buffer[msg.size()] = L'\0';	// null-terminate the string
+
+	GlobalUnlock(hGlobal);
+
+	if (SetClipboardData(CF_UNICODETEXT, hGlobal)) {
+		needFree = false;	// clipboard will take control of it, so I don't need to free it
+	}
+	
+cceeCloseAndExit:
+	if (needFree) GlobalFree(hGlobal);
+
+	CloseClipboard();
+	return;
 }
