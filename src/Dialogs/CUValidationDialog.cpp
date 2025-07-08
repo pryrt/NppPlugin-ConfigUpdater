@@ -22,14 +22,18 @@
 #include "ValidateXML.h"
 #include <string>
 #include "pcjHelper.h"
+#include <commctrl.h>
 
 HWND g_hwndCUValidationDlg;
+const UINT_PTR _uniqueSubclassID = 750118;
 
 void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
 void _sglclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn);	// private: call this routine when ERRORLIST entry is single-clicked
-void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
+void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErBrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when ERRORLIST entry is double-clicked
 std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
+static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -80,6 +84,12 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			if (isDM && versionNpp >= versionDarkDialog) {
 				::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndCUValidationDlg));
 			}
+
+			// Do my subclassing after N++ subclassing... I don't know whether they will conflict:
+			SetWindowSubclass(s_hwErrLbx, _ListBoxSubclassProc, _uniqueSubclassID, 0);
+
+			// Need to tell N++ that I want to handle shortcut keys myself
+			static_cast<BOOL>(::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGADD, reinterpret_cast<LPARAM>(hwndDlg)));
 
 			////////
 			// Finally, Find Center and then position and display the window:
@@ -234,6 +244,8 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			}
 			s_hwFileCbx = nullptr;
 			s_hwErrLbx = nullptr;
+
+			::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGREMOVE, reinterpret_cast<LPARAM>(hwndDlg));
 
 			EndDialog(hwndDlg, 0);
 			DestroyWindow(hwndDlg);
@@ -524,4 +536,23 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 
 	}
 
+}
+
+static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/)
+{
+	// Check for the universal Ctrl+C signal (works on all keyboard layouts)
+	if (uMsg == WM_CHAR) {
+		if (wParam == 0x03) {
+			::MessageBox(hWnd, L"Got Ctrl+C", L"Got Ctrl+C", MB_OK); // Your function to copy text
+			return 0; // Event handled
+		}
+	}
+
+	// When the control is destroyed, it automatically removes this subclass
+	if (uMsg == WM_NCDESTROY) {
+		RemoveWindowSubclass(hWnd, _ListBoxSubclassProc, uIdSubclass);
+	}
+
+	// For all other messages, just pass them to the default handler
+	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
