@@ -507,27 +507,18 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 		HWND hwModelSci = pConfVal->getActiveScintilla();
 
 		if (sModelSearch != "") {
-			WPARAM iPosEOLModel = ::SendMessage(hwModelSci, SCI_GETLINEENDPOSITION, iErrorLine - 1, 0);
+			WPARAM iPosEndOfModel = ::SendMessage(hwModelSci, SCI_GETLENGTH, 0, 0);
 			::SendMessage(hwModelSci, SCI_SETTARGETSTART, 0, 0);
-			::SendMessage(hwModelSci, SCI_SETTARGETEND, iPosEOLModel, 0);
+			::SendMessage(hwModelSci, SCI_SETTARGETEND, iPosEndOfModel, 0);
 			::SendMessage(hwModelSci, SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE, 0);
 			LRESULT iModelResultPos = ::SendMessageA(hwModelSci, SCI_SEARCHINTARGET, sModelSearch.size(), reinterpret_cast<LPARAM>(sModelSearch.c_str()));
 			::SendMessage(hwModelSci, SCI_GOTOPOS, iModelResultPos, 0);
 			if (deltaLines) {
 				LRESULT iElementLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iModelResultPos, 0);		// figure out what model line the element starts at
-				LRESULT iVisibleLine = ::SendMessage(hwSci, SCI_VISIBLEFROMDOCLINE, iElementLine, 0);			// convert from actual line number to "visible" line number (for wrapping/folding)
+				LRESULT iVisibleLine = ::SendMessage(hwModelSci, SCI_VISIBLEFROMDOCLINE, iElementLine, 0);		// convert from actual line number to "visible" line number (for wrapping/folding)
 				::SendMessage(hwModelSci, SCI_SETFIRSTVISIBLELINE, iVisibleLine, 0);							// set that element to the top of the model file, too
 				WPARAM iEstimatedModelLine = iElementLine + deltaLines - 1;										// move the model's caret the same number of lines down from
 				::SendMessage(hwModelSci, SCI_GOTOLINE, iEstimatedModelLine, 0);								// <do the move>
-
-				// // start about the same distance below the current tag as was in the main XML
-				// LRESULT iSecondary = iModelResultPos + deltaPos;
-				// // figure out which line it was on
-				// LRESULT iLine = ::SendMessage(hwModelSci, SCI_LINEFROMPOSITION, iSecondary, 0);
-				// // and make sure that the _beginning_ of that line (not middle or end) is the secondary
-				// iSecondary = ::SendMessage(hwModelSci, SCI_POSITIONFROMLINE, iLine, 0);
-				// // then scroll to that... so that it will hopefully be scrolled all the way left...
-				// ::SendMessage(hwModelSci, SCI_SCROLLRANGE, iSecondary, iModelResultPos);
 			}
 		}
 		else {
