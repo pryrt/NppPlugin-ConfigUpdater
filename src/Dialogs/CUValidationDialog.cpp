@@ -431,8 +431,8 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			|| wsContext.find(L"WordsStyle") != std::wstring::npos
 			|| wsContext.find(L"<LexerType") != std::wstring::npos
 			) {
-			sLocalSearch = "<LexerType name=\"[^\"]*\"";
-			sModelSearch = "<LexerType name=";
+			sLocalSearch = "<LexerType [^>]*name=\"[^\"]*\"";
+			sModelSearch = "<LexerType [^>]*name=";
 			bWantAttr = 16;
 		}
 		// else: anything else just goes to first line of model file
@@ -447,8 +447,8 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			|| wsContext.find(L"<Keywords") != std::wstring::npos
 			|| wsContext.find(L"</Keywords") != std::wstring::npos
 			) {
-			sLocalSearch = "<Language name=\"[^\"]*\"";
-			sModelSearch = "<Language name=";
+			sLocalSearch = "<Language [^>]*name=\"[^\"]*\"";
+			sModelSearch = "<Language [^>]*name=";
 			bWantAttr = 15;
 		}
 	}
@@ -510,7 +510,7 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 			WPARAM iPosEndOfModel = ::SendMessage(hwModelSci, SCI_GETLENGTH, 0, 0);
 			::SendMessage(hwModelSci, SCI_SETTARGETSTART, 0, 0);
 			::SendMessage(hwModelSci, SCI_SETTARGETEND, iPosEndOfModel, 0);
-			::SendMessage(hwModelSci, SCI_SETSEARCHFLAGS, SCFIND_MATCHCASE, 0);
+			::SendMessage(hwModelSci, SCI_SETSEARCHFLAGS, SCFIND_REGEXP, 0);
 			LRESULT iModelResultPos = ::SendMessageA(hwModelSci, SCI_SEARCHINTARGET, sModelSearch.size(), reinterpret_cast<LPARAM>(sModelSearch.c_str()));
 			::SendMessage(hwModelSci, SCI_GOTOPOS, iModelResultPos, 0);
 			if (deltaLines) {
