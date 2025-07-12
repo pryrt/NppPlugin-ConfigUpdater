@@ -76,6 +76,7 @@ void menucall_UpdateConfigFiles();
 void menucall_DownloadModelFiles();
 void menucall_ValidateConfigFiles();
 void menucall_AboutDlg();
+void buttoncall_ValidationHelpDlg();
 
 //
 // Need to expose the globals from PluginDefinition.cpp:
