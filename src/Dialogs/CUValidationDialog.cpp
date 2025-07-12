@@ -24,9 +24,10 @@
 #include "pcjHelper.h"
 #include <commctrl.h>
 
-HWND g_hwndCUValidationDlg;
+HWND g_hwndCUValidationDlg, g_hwndCUHlpDlg;
 ConfigValidator* g_pConfVal;	// private ConfigValidator object
 const UINT_PTR _uniqueSubclassID = 750118;
+bool g_IsDarkMode = false;
 
 void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
@@ -35,6 +36,8 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, C
 std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal);	// private: call this routine when FILECBX entry is changed; returns model filename
 static LRESULT CALLBACK _ListBoxSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 void _copy_current_errlbx_entry(HWND hwErorList);	// copy current selected errorbox entry into clipboard (and return the value for no good reason)
+void _pushed_help_btn(void);	// show the help dialog
+std::vector<std::wstring> _make_human_readable(std::vector<std::wstring> vwsValidationErrors);
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -52,7 +55,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			////////
 			LRESULT versionNpp = ::SendMessage(nppData._nppHandle, NPPM_GETNPPVERSION, 1, 0);	// HIWORD(nppVersion) = major version; LOWORD(nppVersion) = zero-padded minor (so 8|500 will come after 8|410)
 			LRESULT versionDarkDialog = MAKELONG(540, 8);		// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
-			bool isDM = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
+			g_IsDarkMode = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
 
 			////////
 			// setup all the controls before triggering dark mode
@@ -81,7 +84,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			////////
 			// trigger darkmode
 			////////
-			if (isDM && versionNpp >= versionDarkDialog) {
+			if (g_IsDarkMode && versionNpp >= versionDarkDialog) {
 				::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndCUValidationDlg));
 			}
 
@@ -162,9 +165,14 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 							return false;
 					}
 				}
+				case IDC_CU_VALIDATION_HELP_BTN:
+				{
+					_pushed_help_btn();
+					return false;
+				}
 				default:
 				{
-					return false;
+					return true;
 				}
 			}
 		}
@@ -274,16 +282,24 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 		ListBox_AddString(hwErrorList, oValidator.wsGetValidationMessage().c_str());
 		pConfVal->vlErrorLinenums.clear();
 		pConfVal->vwsErrorReasons.clear();
+		pConfVal->vwsErrorHumanReadable.clear();
 		pConfVal->vwsErrorContexts.clear();
 	}
 	else {
 		pConfVal->vlErrorLinenums = oValidator.vlGetMultiLinenums();
 		pConfVal->vwsErrorReasons = oValidator.vwsGetMultiReasons();
+		pConfVal->vwsErrorHumanReadable = _make_human_readable(pConfVal->vwsErrorReasons);
 		pConfVal->vwsErrorContexts = oValidator.vwsGetMultiContexts();
 		std::wstring longestText = L"";
 		size_t nErrors = oValidator.szGetMultiNumErrors();
 		for (size_t e = 0; e < nErrors; e++) {
-			std::wstring msg = std::wstring(L"#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": " + pConfVal->vwsErrorReasons[e];
+			std::wstring msg = std::wstring(L"#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": ";
+			if (pConfVal->vwsErrorHumanReadable[e].size()) {
+				msg += pConfVal->vwsErrorHumanReadable[e] + L" (" + pConfVal->vwsErrorReasons[e] + L")";
+			}
+			else {
+				msg += pConfVal->vwsErrorReasons[e];
+			}
 			ListBox_AddString(hwErrorList, msg.c_str());
 			if (longestText.size() < msg.size()) longestText = msg;
 		}
@@ -340,7 +356,6 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, C
 	// grab the error information for the specific error item from pConfVal
 	size_t nErrors = pConfVal->vlErrorLinenums.size();
 	long iErrorLine = nErrors ? pConfVal->vlErrorLinenums[lbCurSel] : 0;		// 1-based line number
-	std::wstring wsErrorMsg = nErrors ? pConfVal->vwsErrorReasons[lbCurSel] : L"SUCCESS";
 
 	// navigate to file and line
 	::SendMessage(pConfVal->getNppHwnd(), NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsPath.c_str()));
@@ -565,7 +580,13 @@ void _copy_current_errlbx_entry(HWND hwErrorList)
 	if (!OpenClipboard(hwErrorList)) return;
 	if (!EmptyClipboard()) goto cceeCloseAndExit;
 
-	msg = std::wstring(L"#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": " + g_pConfVal->vwsErrorReasons[lbCurSel];
+	msg = std::wstring(L"#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": ";
+	if (g_pConfVal->vwsErrorHumanReadable[lbCurSel].size()) {
+		msg += g_pConfVal->vwsErrorHumanReadable[lbCurSel] + L" (" + g_pConfVal->vwsErrorReasons[lbCurSel] + L")";
+	} else 
+	{
+		msg += g_pConfVal->vwsErrorReasons[lbCurSel];
+	}
 	msg += g_pConfVal->vwsErrorContexts[lbCurSel];
 
 	hGlobal = GlobalAlloc(GMEM_MOVEABLE, (msg.size() + 1) * sizeof(wchar_t));
@@ -589,4 +610,116 @@ cceeCloseAndExit:
 
 	CloseClipboard();
 	return;
+}
+
+// takes common errors and gives a human-readable version
+std::vector<std::wstring> _make_human_readable(std::vector<std::wstring> vwsValidationErrors)
+{
+	std::vector<std::wstring> retvals;
+	for (auto vwsOrig : vwsValidationErrors) {
+		std::wstring vwsNew = L"";
+		if (vwsOrig.find(L"unique-WordsStyle-styleID") != std::wstring::npos) {
+			vwsNew = L"Style ID must be unique, but found duplicate.";
+		}
+		else if (vwsOrig.find(L"violates enumeration constraint") != std::wstring::npos) {
+			if (vwsOrig.find(L"keywordClass") != std::wstring::npos) {
+				vwsNew = L"keywordClass attribute must have a valid value.";
+			}
+			else {
+				vwsNew = L"Specified attribute must have a valid value.";
+			}
+		}
+		retvals.push_back(vwsNew);
+	}
+	return retvals;
+}
+
+// show the help dialog
+void _pushed_help_btn(void)
+{
+	buttoncall_ValidationHelpDlg();
+}
+
+// validation help-dialog callback
+INT_PTR CALLBACK ciDlgCUValHelpProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	static std::wstring wsHelpText(L"");
+	if (wsHelpText == L"") {
+		wsHelpText += L"- Pick one of the stylers, themes, or langs.xml in the File selector.\r\n";
+		wsHelpText += L"- When you VALIDATE, any errors will be listed in the box below the filename.\r\n";
+		wsHelpText += L"  - It will list the line number in the file, along with the error message\r\n";
+		wsHelpText += L"  - You can scroll and/or resize to see more of the text\r\n";
+		wsHelpText += L"- Double-click a line to navigate to that error in the XML file.  You can edit and save the file in Notepad++ while the dialog is still open, and use VALIDATE again to see if that error has been fixed.\r\n";
+		wsHelpText += L"- If you are uncertain about what the fix should look at, you can choose GO TO MODEL to try to line up the appropriate *.model.xml in the same region as the error in your original file.  You can use the example in the model to help determine how your XML should be modified.\r\n";
+		wsHelpText += L"- If you select a different error (even without double-clicking it), the GO TO MODEL will bring you to that error in the original file and line it up with the appropriate section of the model file.\r\n\r\n";
+		wsHelpText += L"The most common errors:\r\n";
+		wsHelpText += L"- Style ID must be unique: no LexerType can contain two WordsStyle lines with the same Style ID.  If your XML does, you will need to compare to the model to see what the right Style ID is for each WordsStyle.\r\n";
+		wsHelpText += L"- keywordClass must have a valid value: there are only a handful of valid values for keywordClass (all listed in the error message).  Compare to the model to see whether this WordsStyle should have a keywordClasss, and if so, which value it should be.\r\n";
+		wsHelpText += L"  - Note: 'keywordClass=\"\"' is not valid; if a WordsStyle doesn't have an associated keywordClass, just delete the attribute completely.\r\n";
+	}
+
+	switch (uMsg) {
+		case WM_INITDIALOG:
+		{
+			// populate with help text:
+			HWND hEdit = ::GetDlgItem(hwndDlg, IDC_CUVH_BIGTEXT);
+			::SetWindowText(hEdit, wsHelpText.c_str());
+
+			// store hwnd
+			g_hwndCUHlpDlg = hwndDlg;
+
+			// determine dark mode
+			g_IsDarkMode = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
+			if (g_IsDarkMode) {
+				::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndCUHlpDlg));
+			}
+
+			// Find Center and then position the window:
+
+			// find App center
+			RECT rc;
+			HWND hParent = GetParent(hwndDlg);
+			::GetClientRect(hParent, &rc);
+			POINT center;
+			int w = rc.right - rc.left;
+			int h = rc.bottom - rc.top;
+			center.x = rc.left + w / 2;
+			center.y = rc.top + h / 2;
+			::ClientToScreen(hParent, &center);
+			rc.left -= static_cast<int>(lParam);
+			rc.left -= static_cast<int>(wParam);
+			rc.left += static_cast<int>(lParam);
+			rc.left += static_cast<int>(wParam);
+
+			// and position dialog
+			RECT dlgRect;
+			::GetClientRect(hwndDlg, &dlgRect);
+			int x = center.x - (dlgRect.right - dlgRect.left) / 2;
+			int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
+			::SetWindowPos(hwndDlg, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
+		}
+
+		return true;
+		case WM_COMMAND:
+			switch (LOWORD(wParam))
+			{
+				case IDCANCEL:
+				case IDOK:
+					EndDialog(hwndDlg, 0);
+					DestroyWindow(hwndDlg);
+					return true;
+			}
+			return false;
+		case WM_CLOSE:
+			EndDialog(hwndDlg, 0);
+			DestroyWindow(hwndDlg);
+			return true;
+		case WM_SIZE:
+		{
+			// TODO: resize the textbox, then return FALSE
+			return true;
+		}
+		default:
+			return false;
+	}
 }

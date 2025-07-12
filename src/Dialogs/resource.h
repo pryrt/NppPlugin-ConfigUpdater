@@ -39,6 +39,11 @@
 #define IDC_CU_VALIDATION_ERROR_LB              1602
 #define IDC_CU_VALIDATION_BTN                   1603
 #define IDC_CU_VALIDATION_MODEL_BTN             1604
+#define IDC_CU_VALIDATION_HELP_BTN              1605
+
+// validation help
+#define IDD_CU_VALIDHELP_DLG                    108
+#define IDC_CUVH_BIGTEXT                        1801
 
 // Download Models Dialog
 #define IDD_CU_DLMODEL_DLG                      107

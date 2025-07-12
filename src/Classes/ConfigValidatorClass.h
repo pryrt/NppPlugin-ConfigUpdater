@@ -24,9 +24,9 @@ public:
 	HWND getActiveScintilla(void) { return _hwActiveScintilla(); }		// retrieve the Active Scintilla HWND
 	std::wstring getNppDir(std::wstring wsWhichDir);					// retrieve one of the directories
 
-	std::vector<std::wstring> vwsErrorReasons;
-	std::vector<std::wstring> vwsErrorContexts;
-	std::vector<long> vlErrorLinenums;
+	std::vector<std::wstring> vwsErrorReasons, vwsErrorHumanReadable;	// the original library-generated errors, and the human-readable equivalents
+	std::vector<std::wstring> vwsErrorContexts;							// the text of the line that causes the error
+	std::vector<long> vlErrorLinenums;									// the line number where the error occurs
 
 private:
 	void _populateValidationLists(void);		// create the list/mapping of XML and XSD
