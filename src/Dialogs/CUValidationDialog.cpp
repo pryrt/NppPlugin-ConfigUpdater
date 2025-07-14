@@ -112,6 +112,8 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
 			::SetWindowPos(hwndDlg, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
 
+			// The dialog box procedure should return TRUE to direct the system to set the keyboard focus to the control specified by wParam.
+			// Otherwise, it should return FALSE to prevent the system from setting the default keyboard focus.
 			return true;
 		}
 		case WM_COMMAND:
@@ -234,6 +236,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			new_h = rectDoneBtn.bottom - rectDoneBtn.top;
 			MoveWindow(hwDoneBtn, new_x, new_y, new_w, new_h, TRUE);
 
+			// If an application processes this message, it should return zero.
 			return false;
 		}
 		case WM_GETMINMAXINFO:
@@ -242,6 +245,8 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			// Set the minimum tracking size (the smallest size the user can drag the window to)
 			lpMMI->ptMinTrackSize.x = 330 + 250; // Minimum width: don't know why using actual window dimensions (330) is not enough
 			lpMMI->ptMinTrackSize.y = 205 + 195; // Minimum height: don't know why using actual window dimensions (205) is not enough
+
+			// If an application processes this message, it should return zero.
 			return false;
 		}
 		case WM_DESTROY:
@@ -697,27 +702,119 @@ INT_PTR CALLBACK ciDlgCUValHelpProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 			int x = center.x - (dlgRect.right - dlgRect.left) / 2;
 			int y = center.y - (dlgRect.bottom - dlgRect.top) / 2;
 			::SetWindowPos(hwndDlg, HWND_TOP, x, y, (dlgRect.right - dlgRect.left), (dlgRect.bottom - dlgRect.top), SWP_SHOWWINDOW);
-		}
 
-		return true;
-		case WM_COMMAND:
+			// The dialog box procedure should return TRUE to direct the system to set the keyboard focus to the control specified by wParam.
+			// Otherwise, it should return FALSE to prevent the system from setting the default keyboard focus.
+			return true;
+		}
+		case WM_COMMAND:	
+		{
 			switch (LOWORD(wParam))
 			{
 				case IDCANCEL:
 				case IDOK:
 					EndDialog(hwndDlg, 0);
 					DestroyWindow(hwndDlg);
-					return true;
+					// If an application processes this message, it should return zero.
+					return false;
 			}
-			return false;
+			// if it reaches here, it hasn't been processed, so return non-zero
+			return true;
+		}
 		case WM_CLOSE:
+		{
 			EndDialog(hwndDlg, 0);
 			DestroyWindow(hwndDlg);
-			return true;
+
+			// If an application processes this message, it should return zero.
+			return false;
+		}
 		case WM_SIZE:
 		{
-			// TODO: resize the textbox, then return FALSE
-			return true;
+			// desired height and width
+			int newWidth = LOWORD(lParam);
+			int newHeight = HIWORD(lParam);
+			std::wstring msg = std::wstring(L"New Window Size: ") + std::to_wstring(newWidth) + L"x" + std::to_wstring(newHeight) + L"\r\n";
+
+			// textbox old size
+			HWND hwTextBox = ::GetDlgItem(hwndDlg, IDC_CUVH_BIGTEXT);
+			RECT rectTextBox;
+			GetWindowRect(hwTextBox, &rectTextBox);
+			LONG w = rectTextBox.right - rectTextBox.left;
+			LONG h = rectTextBox.bottom - rectTextBox.top;
+			msg += std::wstring(L"Old TextBox Rect: (") + std::to_wstring(rectTextBox.left) + L"," + std::to_wstring(rectTextBox.top) + L") ... (" + std::to_wstring(rectTextBox.right) + L"," + std::to_wstring(rectTextBox.bottom) + L") => " + std::to_wstring(w) + L"x" + std::to_wstring(h) + L"\r\n";
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectTextBox), 2);
+			w = rectTextBox.right - rectTextBox.left;
+			h = rectTextBox.bottom - rectTextBox.top;
+			msg += std::wstring(L"Old Map(TextBox): (") + std::to_wstring(rectTextBox.left) + L"," + std::to_wstring(rectTextBox.top) + L") ... (" + std::to_wstring(rectTextBox.right) + L"," + std::to_wstring(rectTextBox.bottom) + L") => " + std::to_wstring(w) + L"x" + std::to_wstring(h) + L"\r\n";
+
+			// experiment with MapDialogRect to convert from dialog units (DLU) to pixels
+			RECT myWind = { 0, 0, 401, 231 };	// 401x231 DLU usable corresponds to the 411x250 DLU in the RC file: there is some overhead
+			MapDialogRect(hwndDlg, &myWind);
+			msg += std::wstring(L"Map(Window: 401x231): (") + std::to_wstring(myWind.right) + L"x" + std::to_wstring(myWind.bottom) + L")\r\n";
+
+			// The textbox is 380x187, and this commented code shows that it matches the textbox old size
+			//myWind = { 0, 0, 380, 187 };
+			//MapDialogRect(hwndDlg, &myWind);
+			//msg += std::wstring(L"Map(TextBox: 380x187): (") + std::to_wstring(myWind.right) + L"x" + std::to_wstring(myWind.bottom) + L")\r\n";
+
+			// Convert the left=10 and right=10 and top=10 and bottom=34 (14 button + more gaps) into pixels
+			RECT myTextBoxGaps = { 0, 0, 20, 44 };
+			MapDialogRect(hwndDlg, &myTextBoxGaps);
+			msg += std::wstring(L"Map(TextGap: 20x44): (") + std::to_wstring(myTextBoxGaps.right) + L"x" + std::to_wstring(myTextBoxGaps.bottom) + L")\r\n";
+
+			// change the width and height of the textbox
+			LONG new_x = rectTextBox.left;
+			LONG new_y = rectTextBox.top;
+			LONG new_w = newWidth - myTextBoxGaps.right;				// base this on the gap
+			LONG new_h = newHeight - myTextBoxGaps.bottom;
+			msg += std::wstring(L"New: (") + std::to_wstring(new_x) + L"," + std::to_wstring(new_y) + L") => " + std::to_wstring(new_w) + L"x" + std::to_wstring(new_h) + L"\r\n";
+			MoveWindow(hwTextBox, new_x, new_y, new_w, new_h, TRUE);
+
+			// For the Close button, start with the original offset and dimensions,
+			HWND hwClose = ::GetDlgItem(hwndDlg, IDCANCEL);
+			RECT rectClose = { 350, 200, 350 + 40, 200 + 14 };	// RC-file (DLU) units for left, top, right, bottom
+			GetWindowRect(hwClose, &rectClose);
+			w = rectClose.right - rectClose.left;
+			h = rectClose.bottom - rectClose.top;
+			msg += std::wstring(L"Old Close Rect: (") + std::to_wstring(rectClose.left) + L"," + std::to_wstring(rectClose.top) + L") ... (" + std::to_wstring(rectClose.right) + L"," + std::to_wstring(rectClose.bottom) + L") => " + std::to_wstring(w) + L"x" + std::to_wstring(h) + L"\r\n";
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectClose), 2);
+			w = rectClose.right - rectClose.left;
+			h = rectClose.bottom - rectClose.top;
+			msg += std::wstring(L"Old Map(Close): (") + std::to_wstring(rectClose.left) + L"," + std::to_wstring(rectClose.top) + L") ... (" + std::to_wstring(rectClose.right) + L"," + std::to_wstring(rectClose.bottom) + L") => " + std::to_wstring(w) + L"x" + std::to_wstring(h) + L"\r\n";
+
+			// Now convert gaps around it
+			RECT myCloseGaps = { 0, 0, 10 + 40, 231-200 };	// only want the gap from window.right to button-left (which is button.width to the left of the 10 DLU gap); and the gap between the bottom of the usable window and the top of the button
+			MapDialogRect(hwndDlg, &myCloseGaps);
+			msg += std::wstring(L"Map(CloseGap: 50x31): (") + std::to_wstring(myCloseGaps.right) + L"x" + std::to_wstring(myCloseGaps.bottom) + L")\r\n";
+			new_x = newWidth - myCloseGaps.right;
+			new_y = newHeight - myCloseGaps.bottom;
+			new_w = w;
+			new_h = h;
+			msg += std::wstring(L"New: (") + std::to_wstring(new_x) + L"," + std::to_wstring(new_y) + L") => " + std::to_wstring(new_w) + L"x" + std::to_wstring(new_h) + L"\r\n";
+			MoveWindow(hwClose, new_x, new_y, new_w, new_h, TRUE);
+
+			// SET #if TRUE TO PUT DEBUG TEXT IN TEXTBOX, INSTEAD OF HELPTEXT
+#if 0
+			::SetWindowText(hwTextBox, msg.c_str());
+#else
+			::SetWindowText(hwTextBox, wsHelpText.c_str());
+#endif
+
+			// If an application processes this message, it should return zero.
+			return false;
+		}
+		case WM_GETMINMAXINFO:
+		{
+			LPMINMAXINFO lpMMI = (LPMINMAXINFO)lParam;
+			// Set the minimum tracking size (the smallest size the user can drag the window to)
+			//	these are in units of pixels, but the RC file is in DLU, so there's actually a scaling factor;
+			//	but since the exact "smallest" doesn't really matter, these values allow the user to shrink, without going too far.
+			lpMMI->ptMinTrackSize.x = 411; // Minimum width
+			lpMMI->ptMinTrackSize.y = 250; // Minimum height
+
+			// If an application processes this message, it should return zero.
+			return false;
 		}
 		default:
 			return false;

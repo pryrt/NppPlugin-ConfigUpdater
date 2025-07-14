@@ -159,6 +159,6 @@ void menucall_AboutDlg(void)
 void buttoncall_ValidationHelpDlg(void)
 {
     // modal freezes the parent
-    DialogBoxParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDC_CU_VALIDATION_HELP_BTN), nppData._nppHandle, (DLGPROC)ciDlgCUValHelpProc, (LPARAM)NULL);
+    DialogBoxParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_VALIDHELP_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUValHelpProc, (LPARAM)NULL);
     return;
 }
