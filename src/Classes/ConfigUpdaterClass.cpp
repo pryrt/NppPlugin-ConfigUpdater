@@ -54,7 +54,7 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		case IDYES:
 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
-			_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"));
+			_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n"));
 			_isAskRestartCancelled = false;
 			_isAskRestartYes = true;
 			// prompt for UAC
@@ -246,12 +246,16 @@ HANDLE ConfigUpdater::_consoleCheck()
 		// save the bufferID for future use
 		_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
 
-		// make sure it's in ERRORLIST mode, and Monitoring (tail -f) mode
-		::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
-		::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
+		if (_uOutBufferID)
+		{
+			// make sure it's in ERRORLIST mode, and Monitoring (tail -f) mode
+			::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
 
-		// find its position
-		res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
+			// find its position
+			res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
+			if (res == -1) res = 0;
+		}
 	}
 
 	// get the View and Index from the previous
@@ -668,11 +672,14 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	_consoleWrite(std::wstring(L"--- Checking Styler/Theme File: '") + themePath + L"'");
 
 	// update the status dialog
-	std::wstring wsLine = themeName + L"\r\n";
-	custatus_AppendText(const_cast<LPWSTR>(wsLine.c_str()));
+	custatus_AppendText(const_cast<LPWSTR>((themeName + L" ").c_str()));
 
 	// check for permissions, exit function if cannot write
-	if (!_ask_dir_permissions(themeDir)) return false;
+	if (!_ask_dir_permissions(themeDir)) {
+		custatus_AppendText(L"\t[NO PERMISSION]\r\n");
+		return false;
+	}
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// get the XML
 	tinyxml2::XMLDocument oStylerDoc;
@@ -681,16 +688,22 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	tinyxml2::XMLElement* pStylerRoot = oStylerDoc.RootElement();
 	if (pStylerRoot == NULL)
 		if (_xml_check_result(tinyxml2::XML_ERROR_FILE_READ_ERROR, &oStylerDoc, themePath))
+		{
+			custatus_AppendText(const_cast<LPWSTR>(L"\t[READ ERROR]\r\n"));
 			return false;
+		}
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// save a copy of the current XML output for future comparison
 	tinyxml2::XMLPrinter xPrinter;
 	oStylerDoc.Accept(&xPrinter);
 	std::string sOrigThemeText = xPrinter.CStr();
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// grab the theme's and model's LexerStyles node for future insertions
 	tinyxml2::XMLElement* pElThemeLexerStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
 	tinyxml2::XMLElement* pElModelLexerStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("LexerStyles");
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	if (isIntermediateSorted)
 	{
@@ -702,6 +715,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 		std::string sTmpFile = themePath8 + ".orig.sorted";
 		oClonedOrig.SaveFile(sTmpFile.c_str());
+		custatus_AppendText(const_cast<LPWSTR>(L"."));
 	}
 
 	// Grab the default attributes from the <GlobalStyles><WidgetStyle name = "Global override" styleID = "0"...>
@@ -732,23 +746,28 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 
 		// then move to next
 		pElModelLexerType = pElModelLexerType->NextSiblingElement("LexerType");
+		custatus_AppendText(const_cast<LPWSTR>(L"."));
 	}
 
 	// sort the LexerType nodes by name (keeping searchResult _last_)
 	_sortLexerTypesByName(pElThemeLexerStyles);
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// Look for missing GlobalStyles::WidgetStyle entries as well
 	tinyxml2::XMLElement* pElThemeGlobalStyles = oStylerDoc.FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
 	tinyxml2::XMLElement* pElModelGlobalStyles = pModelStylerDoc->FirstChildElement("NotepadPlus")->FirstChildElement("GlobalStyles")->ToElement();
 	_addMissingGlobalWidgets(pElModelGlobalStyles, pElThemeGlobalStyles, keepModelColors);
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// Write XML output only if needed: use the saved copy of the XML text compared to the updated text
 	xPrinter.ClearBuffer();
 	oStylerDoc.Accept(&xPrinter);
 	std::string sNewThemeText = xPrinter.CStr();
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	if (sNewThemeText != sOrigThemeText)
 		oStylerDoc.SaveFile(themePath8.c_str());
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// whether we wrote it this time or not, check it for validity
 	ValidateXML themeValidator(themePath.c_str(), _wsThemeValidatorXsdFileName);
@@ -758,52 +777,19 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	}
 	else {
 		UINT64 lnum = themeValidator.uGetValidationLineNum();
-		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum==-1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + themeValidator.wsGetValidationMessage();
+		std::wstring msg = std::wstring(L"Validation of ") + themePath + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\r\n\r\n" + themeValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
 		_hadValidationError = true;
-#if 0
-		if (!_doStopValidationPester) {
-			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
-			int ask = ::MessageBox(nullptr, msg.c_str(), L"Theme Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
-			switch (ask) {
-				case IDCANCEL:
-				{
-					_doAbort = true;
-					break;
-				}
-				case IDNO:
-				{
-					_doStopValidationPester = true;
-					break;
-				}
-				case IDYES:
-				{
-					// open the file
-					::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(themePath.c_str()));
-
-					// Get the current scintilla
-					int which = -1;
-					::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
-					HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
-
-					// go to the right line
-					if (lnum != -1)
-						::SendMessage(curScintilla, SCI_GOTOLINE, static_cast<WPARAM>(lnum - 1), 0);
-
-					// stop looping
-					_doAbort = true;
-					break;
-				}
-			}
-		}
-#endif
 	}
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// Update progress bar
 	if (_doAbort)
 		custatus_SetProgress(100);
 	else
 		custatus_AddProgress(1);
+
+	custatus_AppendText(const_cast<LPWSTR>(L"\r\n"));
 
 	return true;
 }
@@ -1168,7 +1154,7 @@ void ConfigUpdater::_sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, boo
 // updates langs.xml to match langs.model.xml
 void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 {
-	custatus_AppendText(const_cast<LPWSTR>(L"langs.xml\r\n"));
+	custatus_AppendText(const_cast<LPWSTR>(L"langs.xml "));
 	custatus_SetProgress(80);
 
 	// Prepare the filenames
@@ -1179,7 +1165,12 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
 
 	// check for permissions, exit function if cannot write
-	if (!_ask_dir_permissions(_nppCfgDir)) return;
+	if (!_ask_dir_permissions(_nppCfgDir))
+	{
+		custatus_AppendText(const_cast<LPWSTR>(L"\t[NO PERMISSION]\r\n"));
+		return;
+	}
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// load the active and model documents
 	tinyxml2::XMLDocument oDocLangsModel, oDocLangsActive;
@@ -1187,21 +1178,25 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	if (_xml_check_result(eResult, &oDocLangsModel, wsFilenameLangsModel)) return;
 	eResult = oDocLangsActive.LoadFile(sFilenameLangsActive.c_str());
 	if (_xml_check_result(eResult, &oDocLangsActive, wsFilenameLangsActive)) return;
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// save a copy of the current XML output for future comparison
 	tinyxml2::XMLPrinter xPrinter;
 	oDocLangsActive.Accept(&xPrinter);
 	std::string sOrigLangsText = xPrinter.CStr();
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// get the <Languages> element from each
 	tinyxml2::XMLElement* pElLanguagesModel = oDocLangsModel.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
 	if (!pElLanguagesModel) {
 		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDocLangsModel);
+		custatus_AppendText(const_cast<LPWSTR>(L"\t[PARSE ERROR]\r\n"));
 		return;
 	}
 	tinyxml2::XMLElement* pElLanguagesActive = oDocLangsActive.FirstChildElement("NotepadPlus")->FirstChildElement("Languages");
 	if (!pElLanguagesActive) {
 		_xml_check_result(tinyxml2::XML_ERROR_PARSING_ELEMENT, &oDocLangsActive);
+		custatus_AppendText(const_cast<LPWSTR>(L"\n[PARSE ERROR]\r\n"));
 		return;
 	}
 
@@ -1215,11 +1210,14 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 		std::string sTmpFile = sFilenameLangsActive + ".orig.sorted";
 		oClonedOrig.SaveFile(sTmpFile.c_str());
+		custatus_AppendText(const_cast<LPWSTR>(L"."));
 	}
 
 	// Loop through model <Languages>, inserting missing data into active <Languages>
 	tinyxml2::XMLElement* pElLangModel = pElLanguagesModel->FirstChildElement("Language");
 	while (pElLangModel) {
+		custatus_AppendText(const_cast<LPWSTR>(L"."));
+
 		// get the name of this Model Language
 		std::string sLangName = pElLangModel->Attribute("name");
 		tinyxml2::XMLElement* pSearchLangActive = _find_element_with_attribute_value(pElLanguagesActive, nullptr, "Language", "name", sLangName);
@@ -1351,6 +1349,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 	// Once done, sort the languages
 	_sortLanguagesByName(pElLanguagesActive);
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// save only if needed: use the saved copy of the XML text compared to the updated text
 	xPrinter.ClearBuffer();
@@ -1359,6 +1358,7 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 
 	if (sNewLangsText != sOrigLangsText)
 		oDocLangsActive.SaveFile(sFilenameLangsActive.c_str());
+	custatus_AppendText(const_cast<LPWSTR>(L"."));
 
 	// whether we wrote it this time or not, check it for validity
 	ValidateXML langsValidator(wsFilenameLangsActive, _wsLangsValidatorXsdFileName);
@@ -1368,50 +1368,15 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	}
 	else {
 		UINT64 lnum = langsValidator.uGetValidationLineNum();
-		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\n\n" + langsValidator.wsGetValidationMessage();
+		std::wstring msg = std::wstring(L"Validation of ") + wsFilenameLangsActive + L" failed" + (lnum == -1 ? L"" : (L" on line#" + std::to_wstring(lnum))) + L":\r\n\r\n" + langsValidator.wsGetValidationMessage();
 		_consoleWrite(std::wstring(L"! ") + msg);
 		_hadValidationError = true;
-#if 0
-		if (!_doStopValidationPester) {
-			msg += L"\n\nWould you like to edit that file?";	// don't want the question in the .log, so moved it after the _consoleWrite
-			int ask = ::MessageBox(nullptr, msg.c_str(), L"Langs.xml Validation Failed", MB_ICONWARNING | MB_YESNOCANCEL);
-			switch (ask) {
-				case IDCANCEL:
-				{
-					_doAbort = true;
-					break;
-				}
-				case IDNO:
-				{
-					_doStopValidationPester = true;
-					break;
-				}
-				case IDYES:
-				{
-					// open the file
-					::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsFilenameLangsActive.c_str()));
-
-					// Get the current scintilla
-					int which = -1;
-					::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
-					HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
-
-					// go to the right line
-					if (lnum != -1)
-						::SendMessage(curScintilla, SCI_GOTOLINE, static_cast<WPARAM>(lnum - 1), 0);
-
-					// stop looping
-					_doAbort = true;
-					break;
-				}
-			}
-		}
-#endif
 	}
 
 
 	// Update progress bar
 	custatus_SetProgress(99);
+	custatus_AppendText(const_cast<LPWSTR>(L"\r\n"));
 
 	return;
 }
