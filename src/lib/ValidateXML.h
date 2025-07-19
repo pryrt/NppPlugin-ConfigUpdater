@@ -96,7 +96,7 @@ public:
 				}
 
 				// per docs, the top validationError will report the first from the loop in a multi-error context, so the following will work either way
-				std::string msg = std::string(validationError->reason) + "\nLine#" + std::to_string(validationError->line) + ":\n" + std::string(validationError->srcText);
+				std::string msg = std::string(validationError->reason) + "\r\nLine#" + std::to_string(validationError->line) + ":\r\n" + std::string(validationError->srcText);
 				_isValid = _setstatus_validation_failed(L"XML validation FAILED", msg, static_cast<UINT64>(validationError->line));
 				goto ValidationCleanUp;
 			}
