@@ -38,6 +38,9 @@ private:
 	// Checks if the plugin-"console" exists, creates it if necessary, activates the right view/index, and returns the handle 
 	HANDLE _consoleCheck();
 
+	// Shows the most-recent console results
+	void _consoleShow();
+
 	// Prints messages to the plugin-"console" tab; recommended to use DIFF/git-diff nomenclature, where "^+ "=add, "^- "=del, "^! "=change, "^--- "=message
 	void _consoleWrite(std::wstring wsStr);
 	void _consoleWrite(std::string sStr);
