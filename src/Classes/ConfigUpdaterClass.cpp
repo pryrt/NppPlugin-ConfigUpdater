@@ -233,39 +233,6 @@ HANDLE ConfigUpdater::_consoleCheck()
 		LocalFree(messageBuffer);
 		return nullptr;
 	}
-#if 0
-	// check if the file is already open (so bufferID has been stored)
-	LRESULT res = _uOutBufferID ? ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0) : -1;
-	if (res == -1) {
-		// file should exist now, because of CreateFile, so need to open it
-		LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
-		if (!status) {
-			CloseHandle(hConsoleFile);
-			return nullptr;
-		}
-
-		// save the bufferID for future use
-		_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
-
-		if (_uOutBufferID)
-		{
-			// make sure it's in ERRORLIST mode, and Monitoring (tail -f) mode
-			::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
-
-			// find its position
-			res = ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0);
-			if (res == -1) res = 0;
-		}
-	}
-
-	// get the View and Index from the previous
-	WPARAM view = (res & 0xC0000000) >> 30;	// upper bits are view
-	LPARAM index = res & 0x3FFFFFFF;		// lower bits are index
-
-	// activate
-	::SendMessage(_hwndNPP, NPPM_ACTIVATEDOC, view, index);
-#endif
 
 	// return the correct scintilla HWND
 	return hConsoleFile;
@@ -620,14 +587,15 @@ bool ConfigUpdater::go(bool isIntermediateSorted)
 	_consoleTimestamp();
 	_initInternalState();
 	_readPluginSettings();
+	custatus_SetProgress(0);												// PROGRESS: start at 0%
 	isIntermediateSorted |= _setting_isIntermediateSorted;
-	_updateAllThemes(isIntermediateSorted);
+	_updateAllThemes(isIntermediateSorted);									// PROGRESS: stylers.xml will be 0-10%, other themes are 10-90%
 	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return false; }
 	if (!custatus_GetInterruptFlag())
-		_updateLangs(isIntermediateSorted);
+		_updateLangs(isIntermediateSorted);									// PROGRESS: forces 90%, runs to 99%
 	if (_doAbort) { _consoleWrite(L"!!! ConfigUpdater interrupted. !!!"); custatus_CloseWindow(); return false; }
 	_consoleWrite(L"--- ConfigUpdater done. ---");
-	custatus_SetProgress(100);
+	custatus_SetProgress(100);												// PROGRESS: done
 	custatus_AppendText(L"--- ConfigUpdater done. ---");
 	if (_hadValidationError)
 		_consoleWrite(L"!!! There was at least one validation error.  Recommend you run Plugins > ConfigUpdater > Validate Config Files !!!");
@@ -683,7 +651,7 @@ tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDoc
 void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 {
 	tinyxml2::XMLDocument* pModelStylerDoc = _getModelStyler();
-	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted);
+	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted, 10);	// stylers.xml is allocated 10%
 	if (_doAbort) return;	// need to abort
 
 
@@ -696,6 +664,35 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
 	if (_nppCfgThemesDir == _nppAppThemesDir)
 		themeDirs.pop_back();
+
+	// need to count the themes
+	int count = 0;
+	for (auto wsDir : themeDirs) {
+		if (_doAbort) return;	// need to abort
+		if (custatus_GetInterruptFlag()) break; // exit early on CANCEL
+		if (PathFileExists(wsDir.c_str())) {
+			if (!SetCurrentDirectory(wsDir.c_str())) return;
+			fhFound = FindFirstFile(L"*.xml", &infoFound);
+			if (fhFound != INVALID_HANDLE_VALUE) {
+				bool stillFound = true;
+				while (stillFound) {
+					// count this file
+					++count;
+					if (_doAbort) return;	// need to abort
+
+					// look for next file
+					stillFound &= static_cast<bool>(FindNextFile(fhFound, &infoFound));
+					// static cast needed because bool and BOOL are not actually the same
+				}
+			}
+			if (!SetCurrentDirectory(curDir.c_str())) return;
+		}
+	}
+
+	// if successfully counted, use 80%/count (that means that the n files will take progress bar from from 10% to 90%); if problem with count, just use 1% increments as fallback
+	int pct = (!count) ? 1 : static_cast<int>(round(80.0 / static_cast<double>(count)));
+
+	// now iterate through all the theme dirs, and inside each dir, through all the themes found, and update each theme individually
 	for (auto wsDir : themeDirs) {
 		if (_doAbort) return;	// need to abort
 		if (custatus_GetInterruptFlag()) break; // exit early on CANCEL
@@ -706,7 +703,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 				bool stillFound = true;
 				while (stillFound) {
 					// process this file
-					stillFound &= _updateOneTheme(pModelStylerDoc, wsDir, infoFound.cFileName, isIntermediateSorted);
+					stillFound &= _updateOneTheme(pModelStylerDoc, wsDir, infoFound.cFileName, isIntermediateSorted, pct);
 					if (_doAbort) return;	// need to abort
 
 					// look for next file
@@ -722,7 +719,7 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 }
 
 // Updates one particular theme or styler file
-bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted)
+bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted, int pbpct)
 {
 	// get full path to file
 	pcjHelper::delNull(themeDir);
@@ -847,7 +844,7 @@ bool ConfigUpdater::_updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std:
 	if (_doAbort)
 		custatus_SetProgress(100);
 	else
-		custatus_AddProgress(1);
+		custatus_AddProgress(pbpct);
 
 	custatus_AppendText(const_cast<LPWSTR>(L"\r\n"));
 
@@ -1215,7 +1212,7 @@ void ConfigUpdater::_sortLanguagesByName(tinyxml2::XMLElement* pElLanguages, boo
 void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 {
 	custatus_AppendText(const_cast<LPWSTR>(L"langs.xml "));
-	custatus_SetProgress(80);
+	custatus_SetProgress(90);
 
 	// Prepare the filenames
 	std::string sFilenameLangsModel = pcjHelper::wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";

@@ -60,7 +60,7 @@ private:
 	void _readPluginSettings(void);																													// reads the plugin's config file
 	tinyxml2::XMLDocument* _getModelStyler(void);																									// gets the XML
 	void _updateAllThemes(bool isIntermediateSorted);																								// loops over the stylers.xml, <cfg>\Themes, and <app>\Themes
-	bool _updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted);			// Updates one particular theme or styler file
+	bool _updateOneTheme(tinyxml2::XMLDocument* pModelStylerDoc, std::wstring themeDir, std::wstring themeName, bool isIntermediateSorted, int pbpct);			// Updates one particular theme or styler file
 	void _addMissingLexerType(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerStyles, bool keepModelColors);			// clones any missing lexers from model to theme (and fixes attributes)
 	void _addMissingLexerStyles(tinyxml2::XMLElement* pElModelLexerType, tinyxml2::XMLElement* pElThemeLexerType, bool keepModelColors);			// clones any styles for a given lexer from model to theme (and fixes attributes)
 	void _addMissingGlobalWidgets(tinyxml2::XMLElement* pElModelGlobalStyles, tinyxml2::XMLElement* pElThemeGlobalStyles, bool keepModelColors);	// clones any missing WidgetStyle entries from model to the theme (and fixes attributes)
