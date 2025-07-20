@@ -4,6 +4,7 @@
 #include "pcjHelper.h"
 
 extern NppData nppData;
+std::wstring wsConsoleFilePath;
 
 bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
 {
@@ -211,7 +212,7 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 //		Consumer is required to CloseHandle() when done writing
 HANDLE ConfigUpdater::_consoleCheck()
 {
-	static std::wstring wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterLog";
+	wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterLog";
 
 	// whether the file exists or not, need to open it for Append
 	HANDLE hConsoleFile = CreateFile(
@@ -232,7 +233,7 @@ HANDLE ConfigUpdater::_consoleCheck()
 		LocalFree(messageBuffer);
 		return nullptr;
 	}
-
+#if 0
 	// check if the file is already open (so bufferID has been stored)
 	LRESULT res = _uOutBufferID ? ::SendMessage(_hwndNPP, NPPM_GETPOSFROMBUFFERID, static_cast<WPARAM>(_uOutBufferID), 0) : -1;
 	if (res == -1) {
@@ -264,6 +265,7 @@ HANDLE ConfigUpdater::_consoleCheck()
 
 	// activate
 	::SendMessage(_hwndNPP, NPPM_ACTIVATEDOC, view, index);
+#endif
 
 	// return the correct scintilla HWND
 	return hConsoleFile;
@@ -501,6 +503,31 @@ void ConfigUpdater::_consoleTruncate(void)
 	HANDLE hConsoleFile = _consoleCheck();
 	if (!hConsoleFile) return;
 
+	// consoleTruncate doesn't actually need to use the handle to write, so can close it immediately.
+	if (hConsoleFile) {
+		CloseHandle(hConsoleFile);	// make sure the handle is closed in every _consoleXXX function
+		hConsoleFile = nullptr;
+	}
+
+	// file should exist now, because of CreateFile, so need to open it
+	LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
+	if (!status)
+		return;
+
+	// save the bufferID for future use
+	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
+
+	// nothing to do if there's a problem opening the file
+	if (!_uOutBufferID)
+		return;
+
+	// make sure it's up-to-date
+	::SendMessage(_hwndNPP, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
+
+	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
+	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+	// 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
+
 	// Get the current scintilla
 	int which = -1;
 	::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
@@ -518,13 +545,6 @@ void ConfigUpdater::_consoleTruncate(void)
 		Sci_TextToFindFull search_text_obj{ search_range, "^--- ---", found_range };
 		LRESULT found_position = ::SendMessage(curScintilla, SCI_FINDTEXTFULL, SCFIND_REGEXP, reinterpret_cast<LPARAM>(&search_text_obj));
 		if (found_position != static_cast<LRESULT>(-1)) {	// if it's actually found
-			// need to close my exclusive handle on the file _before_ trying to write to it
-			CloseHandle(hConsoleFile);
-			hConsoleFile = nullptr;
-
-			// turn off monitoring, so I can edit
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
-
 			// It wasn't always done, so give it some time; unfortunately, there is nothing I can poll to make sure it's actually done, so I just have to guess. ;-(
 			Sleep(100);
 
@@ -533,25 +553,64 @@ void ConfigUpdater::_consoleTruncate(void)
 
 			// save edits
 			::SendMessage(_hwndNPP, NPPM_SAVECURRENTFILE, 0, 0);
-
-			// When I try to just enable monitoring again, future writes to hConsoleFile don't work ("open in another process"),
-			//		so need to reset by closing the file in N++; the next time I _consoleWrite() or similar, it will re-open the console file
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
-
-			// need to wait until file is actually closed (I really wish there were an NPPM command that waited for File>Close to complete, instead of having to MENUCOMMAND)
-			//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdaterLog; once it changes, the file is done closing, and it's safe to move on
-			wchar_t bufFileName[MAX_PATH] = L"ConfigUpdaterLog";
-			std::wstring wsFileName = bufFileName;
-			while (pcjHelper::delNull(wsFileName) == L"ConfigUpdaterLog") {
-				memset(bufFileName, 0, MAX_PATH);
-				::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
-				wsFileName = bufFileName;
-			}
-
 		}
 	}
-	if (hConsoleFile)
+
+	// Don't need the file open anymore.
+	::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+
+	// need to wait until file is actually closed (I really wish there were an NPPM command that waited for File>Close to complete, instead of having to MENUCOMMAND)
+	//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdaterLog; once it changes, the file is done closing, and it's safe to move on
+	wchar_t bufFileName[MAX_PATH] = L"ConfigUpdaterLog";
+	std::wstring wsFileName = bufFileName;
+	while (pcjHelper::delNull(wsFileName) == L"ConfigUpdaterLog") {
+		memset(bufFileName, 0, MAX_PATH);
+		::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
+		wsFileName = bufFileName;
+	}
+
+}
+
+
+// Shows the most-recent console results
+void ConfigUpdater::_consoleShow(void)
+{
+	HANDLE hConsoleFile = _consoleCheck();
+	if (!hConsoleFile) return;
+
+	// consoleTruncate doesn't actually need to use the handle to write, so can close it immediately.
+	if (hConsoleFile) {
 		CloseHandle(hConsoleFile);	// make sure the handle is closed in every _consoleXXX function
+		hConsoleFile = nullptr;
+	}
+
+	// file should exist now, because of CreateFile, so need to open it
+	LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
+	if (!status)
+		return;
+
+	// save the bufferID for future use
+	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
+
+	// nothing to do if there's a problem opening the file
+	if (!_uOutBufferID)
+		return;
+
+	// make sure it's up-to-date
+	::SendMessage(_hwndNPP, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
+
+	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
+	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+	// 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
+
+	// Get the current scintilla
+	int which = -1;
+	::SendMessage(nppData._nppHandle, NPPM_GETCURRENTSCINTILLA, 0, (LPARAM)&which);
+	HWND curScintilla = (which < 1) ? nppData._scintillaMainHandle : nppData._scintillaSecondHandle;
+
+	// Go to end of file
+	::SendMessage(curScintilla, SCI_DOCUMENTEND, 0, 0);
+
 }
 
 
@@ -572,6 +631,7 @@ bool ConfigUpdater::go(bool isIntermediateSorted)
 	custatus_AppendText(L"--- ConfigUpdater done. ---");
 	if (_hadValidationError)
 		_consoleWrite(L"!!! There was at least one validation error.  Recommend you run Plugins > ConfigUpdater > Validate Config Files !!!");
+	_consoleShow();
 	custatus_CloseWindow();
 	return _ask_rerun_normal();
 }
