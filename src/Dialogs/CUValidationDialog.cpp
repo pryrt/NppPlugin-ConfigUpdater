@@ -236,6 +236,17 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			new_h = rectDoneBtn.bottom - rectDoneBtn.top;
 			MoveWindow(hwDoneBtn, new_x, new_y, new_w, new_h, TRUE);
 
+			// update HELP button
+			RECT rectHelpBtn;
+			HWND hwHelpBtn = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_HELP_BTN);
+			GetWindowRect(hwHelpBtn, &rectHelpBtn);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectHelpBtn), 2);
+			new_x = rectHelpBtn.left;
+			new_y = newHeight - 50 - 11;	// 11 extra buffer
+			new_w = rectHelpBtn.right - rectHelpBtn.left;
+			new_h = rectHelpBtn.bottom - rectHelpBtn.top;
+			MoveWindow(hwHelpBtn, new_x, new_y, new_w, new_h, TRUE);
+
 			// If an application processes this message, it should return zero.
 			return false;
 		}
@@ -298,7 +309,7 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 		std::wstring longestText = L"";
 		size_t nErrors = oValidator.szGetMultiNumErrors();
 		for (size_t e = 0; e < nErrors; e++) {
-			std::wstring msg = std::wstring(L"#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": ";
+			std::wstring msg = std::wstring(L"Line#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": ";
 			if (pConfVal->vwsErrorHumanReadable[e].size()) {
 				msg += pConfVal->vwsErrorHumanReadable[e] + L" (" + pConfVal->vwsErrorReasons[e] + L")";
 			}
@@ -585,7 +596,7 @@ void _copy_current_errlbx_entry(HWND hwErrorList)
 	if (!OpenClipboard(hwErrorList)) return;
 	if (!EmptyClipboard()) goto cceeCloseAndExit;
 
-	msg = std::wstring(L"#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": ";
+	msg = std::wstring(L"Line#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": ";
 	if (g_pConfVal->vwsErrorHumanReadable[lbCurSel].size()) {
 		msg += g_pConfVal->vwsErrorHumanReadable[lbCurSel] + L" (" + g_pConfVal->vwsErrorReasons[lbCurSel] + L")";
 	} else 
