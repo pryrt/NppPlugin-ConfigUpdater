@@ -493,7 +493,6 @@ void ConfigUpdater::_consoleTruncate(void)
 
 	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
 	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
-	// 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
 
 	// Get the current scintilla
 	int which = -1;
@@ -568,7 +567,6 @@ void ConfigUpdater::_consoleShow(void)
 
 	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
 	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
-	// 			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_VIEW_MONITORING);
 
 	// Get the current scintilla
 	int which = -1;
