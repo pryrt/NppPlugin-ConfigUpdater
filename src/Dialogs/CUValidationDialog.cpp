@@ -28,6 +28,7 @@ HWND g_hwndCUValidationDlg, g_hwndCUHlpDlg;
 ConfigValidator* g_pConfVal;	// private ConfigValidator object
 const UINT_PTR _uniqueSubclassID = 750118;
 bool g_IsDarkMode = false;
+const std::wstring wsEphemeral = L"Please select file to validate...";
 
 void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal);	// private: call this when the *.model.xml button is pushed
 void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pConfVal);	// private: call this routine when VALIDATE button is pushed
@@ -41,7 +42,7 @@ std::vector<std::wstring> _make_human_readable(std::vector<std::wstring> vwsVali
 
 INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr, s_hwModelBtn = nullptr;
+	static HWND s_hwFileCbx = nullptr, s_hwErrLbx = nullptr, s_hwModelBtn = nullptr, s_hwValidationBtn = nullptr;
 	static std::wstring s_wsModelName = L"";
 	switch (uMsg)
 	{
@@ -68,18 +69,22 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			s_hwFileCbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_FILE_CBX);
 			s_hwErrLbx = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_ERROR_LB);
 			s_hwModelBtn = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_MODEL_BTN);
+			s_hwValidationBtn = GetDlgItem(g_hwndCUValidationDlg, IDC_CU_VALIDATION_BTN);
 
 			// Iterate thru the XML Names to populate the combobox
 			ComboBox_ResetContent(s_hwFileCbx);
 			for (auto xmlName : g_pConfVal->getXmlNames()) {
 				ComboBox_AddString(s_hwFileCbx, xmlName.c_str());
 			}
+			ComboBox_AddString(s_hwFileCbx, wsEphemeral.c_str());
+			ComboBox_SetCurSel(s_hwFileCbx, ComboBox_GetCount(s_hwFileCbx)-1);
 
 			// Make sure Error listbox starts empty
 			ListBox_ResetContent(s_hwErrLbx);
 
-			// Start with the *.model.xml button disabled
+			// Start with the Validate and Model buttons disabled
 			Button_Enable(s_hwModelBtn, false);
+			Button_Enable(s_hwValidationBtn, false);
 
 			////////
 			// trigger darkmode
@@ -161,6 +166,8 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 						case CBN_SELCHANGE:
 						{
 							s_wsModelName = _changed_filecbx_entry(s_hwFileCbx, s_hwErrLbx, s_hwModelBtn, g_pConfVal);
+							Button_Enable(s_hwValidationBtn, true);
+							Button_Enable(s_hwModelBtn, true);
 							return true;
 						}
 						default:
@@ -225,16 +232,16 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 			new_h = rectModelBtn.bottom - rectModelBtn.top;
 			MoveWindow(s_hwModelBtn, new_x, new_y, new_w, new_h, TRUE);
 
-			// update DONE(Cancel) button
-			RECT rectDoneBtn;
-			HWND hwDoneBtn = GetDlgItem(g_hwndCUValidationDlg, IDCANCEL);
-			GetWindowRect(hwDoneBtn, &rectDoneBtn);
-			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectDoneBtn), 2);
+			// update Close(Cancel) button
+			RECT rectCloseBtn;
+			HWND hwCloseBtn = GetDlgItem(g_hwndCUValidationDlg, IDCANCEL);
+			GetWindowRect(hwCloseBtn, &rectCloseBtn);
+			MapWindowPoints(HWND_DESKTOP, hwndDlg, reinterpret_cast<LPPOINT>(&rectCloseBtn), 2);
 			new_x = newWidth - 60 - 10 - 55;	// w=60, gap=10, unknown=55
 			new_y = newHeight - 50 - 11;	// 11 extra buffer
-			new_w = rectDoneBtn.right - rectDoneBtn.left;
-			new_h = rectDoneBtn.bottom - rectDoneBtn.top;
-			MoveWindow(hwDoneBtn, new_x, new_y, new_w, new_h, TRUE);
+			new_w = rectCloseBtn.right - rectCloseBtn.left;
+			new_h = rectCloseBtn.bottom - rectCloseBtn.top;
+			MoveWindow(hwCloseBtn, new_x, new_y, new_w, new_h, TRUE);
 
 			// update HELP button
 			RECT rectHelpBtn;
@@ -300,6 +307,8 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 		pConfVal->vwsErrorReasons.clear();
 		pConfVal->vwsErrorHumanReadable.clear();
 		pConfVal->vwsErrorContexts.clear();
+		pConfVal->nErrors = 0;
+		pConfVal->vlErrorLinenums.push_back(0);	// always let ->vlErrorLinenums[0] give a valid line number
 	}
 	else {
 		pConfVal->vlErrorLinenums = oValidator.vlGetMultiLinenums();
@@ -307,8 +316,8 @@ void _pushed_validate_btn(HWND hwFileCbx, HWND hwErrorList, ConfigValidator* pCo
 		pConfVal->vwsErrorHumanReadable = _make_human_readable(pConfVal->vwsErrorReasons);
 		pConfVal->vwsErrorContexts = oValidator.vwsGetMultiContexts();
 		std::wstring longestText = L"";
-		size_t nErrors = oValidator.szGetMultiNumErrors();
-		for (size_t e = 0; e < nErrors; e++) {
+		pConfVal->nErrors = oValidator.szGetMultiNumErrors();
+		for (size_t e = 0; e < pConfVal->nErrors; e++) {
 			std::wstring msg = std::wstring(L"Line#") + std::to_wstring(pConfVal->vlErrorLinenums[e]) + L": ";
 			if (pConfVal->vwsErrorHumanReadable[e].size()) {
 				msg += pConfVal->vwsErrorHumanReadable[e] + L" (" + pConfVal->vwsErrorReasons[e] + L")";
@@ -370,7 +379,7 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, C
 	std::wstring wsXSD = (pConfVal->getXsdPaths())[cbCurSel];
 
 	// grab the error information for the specific error item from pConfVal
-	size_t nErrors = pConfVal->vlErrorLinenums.size();
+	size_t nErrors = pConfVal->nErrors;
 	long iErrorLine = nErrors ? pConfVal->vlErrorLinenums[lbCurSel] : 0;		// 1-based line number
 
 	// navigate to file and line
@@ -379,13 +388,13 @@ void _dblclk_errorlbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, C
 	::SendMessage(pConfVal->getActiveScintilla(), SCI_GOTOLINE, static_cast<WPARAM>(iErrorLine - 1), 0);
 
 	// if there are no errors, disable the *.model.xml button, otherwise, it's safe to enable
-	Button_Enable(hwModelBtn, nErrors != 0);
+	Button_Enable(hwModelBtn, true);
 
 	return;
 }
 
 // private: call this routine when FILECBX entry is changed; returns model filename
-std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, ConfigValidator* pConfVal)
+std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND /*hwModelBtn*/, ConfigValidator* pConfVal)
 {
 	// Get the active file (index)
 	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
@@ -394,17 +403,26 @@ std::wstring _changed_filecbx_entry(HWND hwFileCbx, HWND hwErrorList, HWND hwMod
 	// clear the Error ListBox
 	ListBox_ResetContent(hwErrorList);
 
-	// disable the model button, but set the model string based on the selected file
-	Button_Enable(hwModelBtn, false);
+	// set the model string based on the selected file
 	std::wstring wsName = (pConfVal->getXmlNames())[cbCurSel];
 	std::wstring wsModel = (wsName == L"langs.xml") ? L"langs.model.xml" : L"stylers.model.xml";	// pick the right model file
+
+	// if last entry is still the ephemeral value, delete it
+	int idxLast = ComboBox_GetCount(hwFileCbx) - 1;
+	int szLast = ComboBox_GetLBTextLen(hwFileCbx, idxLast) + 1;
+	std::wstring wsLast(szLast, L'\0');
+	ComboBox_GetLBText(hwFileCbx, idxLast, const_cast<LPCTSTR>(wsLast.data()));
+	pcjHelper::delNull(wsLast);
+	if (wsEphemeral == wsLast) {
+		ComboBox_DeleteString(hwFileCbx, idxLast);
+	}
 
 	// return the right *.model.xml
 	return wsModel;
 }
 
 // private: call this when the *.model.xml button is pushed
-void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::wstring wsModelName, ConfigValidator* pConfVal)
+void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND /*hwModelBtn*/, std::wstring wsModelName, ConfigValidator* pConfVal)
 {
 	// Get the active file (index)
 	LRESULT cbCurSel = ::SendMessage(hwFileCbx, CB_GETCURSEL, 0, 0);
@@ -412,18 +430,10 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 
 	// Get the active Error (index) -- it might be LB_ERR if no error is selected (in which case, we'll want to go to line 1 (1-based))
 	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
-	if (LB_ERR == lbCurSel) return;
-
-	// if there are no errors, disable the *.model.xml button and exit
-	size_t nErrors = pConfVal->vlErrorLinenums.size();
-	if (!nErrors) {
-		Button_Enable(hwModelBtn, false);
-		return;
-	}
 
 	// assume that we will go to first line in model
 	//size_t iModelLocation = 0;		// 0-based location in the model file
-	long iErrorLine = pConfVal->vlErrorLinenums[lbCurSel];		// 1-based line number for the XML file (_not_ the *.model.xml file)
+	long iErrorLine = (LB_ERR == lbCurSel) ? 0 : pConfVal->vlErrorLinenums[lbCurSel];		// 1-based line number for the XML file (_not_ the *.model.xml file); if no selection, goto line 0
 
 	// make sure the error-XML file is active
 	std::wstring wsPath = (pConfVal->getXmlPaths())[cbCurSel];
@@ -432,7 +442,7 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND hwModelBtn, std::w
 
 	// Because line-vs-element metadata isn't encoded with the parsed XML structure, I cannot extract the parent element's name
 	// Instead, based on the error context, I need to look for a different substring.
-	std::wstring wsContext = pConfVal->vwsErrorContexts[lbCurSel];
+	std::wstring wsContext = ((LB_ERR == lbCurSel)||(!pConfVal->nErrors)) ? L"<<NO CONTEXT>>" : pConfVal->vwsErrorContexts[lbCurSel];
 	std::string sLocalSearch = "";
 	std::string sModelSearch = "";
 	int bWantAttr = 0;			// set to the offset for the _quoted_ attribute on the "model" searches that need to look for the a particular name="..." attribute for the given element
@@ -588,7 +598,7 @@ void _copy_current_errlbx_entry(HWND hwErrorList)
 	bool needFree = false;
 	HGLOBAL hGlobal = nullptr;
 
-	if (!g_pConfVal->vlErrorLinenums.size()) return;		// nothing to copy if there are no errors
+	if (!g_pConfVal->nErrors) return;		// nothing to copy if there are no errors
 
 	LRESULT lbCurSel = ::SendMessage(hwErrorList, LB_GETCURSEL, 0, 0);
 	if (LB_ERR == lbCurSel) return;
@@ -637,6 +647,12 @@ std::vector<std::wstring> _make_human_readable(std::vector<std::wstring> vwsVali
 		if (vwsOrig.find(L"unique-WordsStyle-styleID") != std::wstring::npos) {
 			vwsNew = L"Style ID must be unique, but found duplicate.";
 		}
+		else if (vwsOrig.find(L"unique-widgetstyle-name") != std::wstring::npos) {
+			vwsNew = L"WidgetStyle name must be unique, but found duplicate.";
+		}
+		else if (vwsOrig.find(L"unique-keywords-name") != std::wstring::npos) {
+			vwsNew = L"Keywords name must be unique, but found duplicate.";
+		}
 		else if (vwsOrig.find(L"violates enumeration constraint") != std::wstring::npos) {
 			if (vwsOrig.find(L"keywordClass") != std::wstring::npos) {
 				vwsNew = L"keywordClass attribute must have a valid value.";
@@ -666,8 +682,8 @@ INT_PTR CALLBACK ciDlgCUValHelpProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 		wsHelpText += L"  - It will list the line number in the file, along with the error message\r\n";
 		wsHelpText += L"  - You can scroll and/or resize to see more of the text\r\n";
 		wsHelpText += L"- Double-click a line to navigate to that error in the XML file.  You can edit and save the file in Notepad++ while the dialog is still open, and use VALIDATE again to see if that error has been fixed.\r\n";
-		wsHelpText += L"- If you are uncertain about what the fix should look at, you can choose GO TO MODEL to try to line up the appropriate *.model.xml in the same region as the error in your original file.  You can use the example in the model to help determine how your XML should be modified.\r\n";
-		wsHelpText += L"- If you select a different error (even without double-clicking it), the GO TO MODEL will bring you to that error in the original file and line it up with the appropriate section of the model file.\r\n\r\n";
+		wsHelpText += L"- If you are uncertain about what the fix should look at, you can choose OPEN/ALIGN MODEL IN OTHER VIEW to try to line up the appropriate *.model.xml in the same region as the error in your original file.  You can use the example in the model to help determine how your XML should be modified.\r\n";
+		wsHelpText += L"- If you select a different error (even without double-clicking it), the OPEN/ALIGN MODEL IN OTHER VIEW will bring you to that error in the original file and line it up with the appropriate section of the model file.\r\n\r\n";
 		wsHelpText += L"The most common errors:\r\n";
 		wsHelpText += L"- Style ID must be unique: no LexerType can contain two WordsStyle lines with the same Style ID.  If your XML does, you will need to compare to the model to see what the right Style ID is for each WordsStyle.\r\n";
 		wsHelpText += L"- keywordClass must have a valid value: there are only a handful of valid values for keywordClass (all listed in the error message).  Compare to the model to see whether this WordsStyle should have a keywordClasss, and if so, which value it should be.\r\n";

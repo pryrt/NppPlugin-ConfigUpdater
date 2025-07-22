@@ -27,6 +27,7 @@ public:
 	std::vector<std::wstring> vwsErrorReasons, vwsErrorHumanReadable;	// the original library-generated errors, and the human-readable equivalents
 	std::vector<std::wstring> vwsErrorContexts;							// the text of the line that causes the error
 	std::vector<long> vlErrorLinenums;									// the line number where the error occurs
+	size_t nErrors;
 
 private:
 	void _populateValidationLists(void);		// create the list/mapping of XML and XSD

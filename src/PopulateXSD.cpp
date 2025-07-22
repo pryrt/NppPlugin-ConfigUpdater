@@ -222,6 +222,10 @@ namespace PopulateXSD {
                   <xs:attribute name="tabSettings" type="xs:integer" use="optional"/>
                   <xs:attribute name="backspaceUnindent" type="xs:string" use="optional"/>
                 </xs:complexType>
+                <xs:unique name="unique-keywords-name">
+                  <xs:selector xpath="Keywords" />
+                  <xs:field xpath="@name" />
+                </xs:unique>
               </xs:element>
             </xs:sequence>
           </xs:complexType>
