@@ -44,8 +44,9 @@ Historically, some of the themes have had XML problems, such as two styles in th
         - If the XML has problems, each line of the listbox will give a linenumber in the file where the problem exists, along with the error message.  Double-clicking on this line will open the config file to that linenumber, so that you can make changes
           ![](./.validator-failed.png)
         - Running **Validate** again will re-validate the same file: if you have fixed all the problems, it will give you the SUCCESS message.
-    - Using the **\*.model.xml** button (which will rename to **stylers.model.xml** or **langs.model.xml** depending on the Files dropdown value) will put the model file in the other view, and will attempt to scroll both files to approximately the same location, so that you can see what the model does for that particular language, so that you can investigate the difference between the language and its model, to try to fix the error.  (Starting with Notepad++ v8.8.2, the model files will have been validated in the source repo before being distributed, so they are "known good".)
-    - **Done** will exit the dialog with no further interaction or editing.
+    - Using the **Open/Align Model in Other View** button will put the model file in the other view, and will attempt to scroll both files to approximately the same location, so that you can see what the model does for that particular language, so that you can investigate the difference between the language and its model, to try to fix the error.  (Starting with Notepad++ v8.8.2, the model files will have been validated in the source repo before being distributed, so they are "known good".)
+    - **Help** will pop up a dialog with information similar to this file.
+    - **Close** will exit the dialog with no further interaction or editing.
 
 ### Common Validation Issues
 

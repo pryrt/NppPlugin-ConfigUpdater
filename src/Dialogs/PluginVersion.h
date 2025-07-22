@@ -18,8 +18,8 @@
 */
 
 #pragma once
-#define VERSION_DIGITALVALUE        2, 2, 0, 3
-#define VERSION_VALUE               "2.2.0-dev3\0"
+#define VERSION_DIGITALVALUE        2, 2, 0, 4
+#define VERSION_VALUE               "2.2.0-dev4\0"
 #define VERSION_WSTR                TEXT(VERSION_VALUE)
 #define VERSION_AUTHOR              "Peter C. Jones\0"
 #define VERSION_PLUGIN_DESCRIPTION  "Notepad++ Plugin to Keep Langs/Stylers/Themes Config Files Up-to-Date\0"
