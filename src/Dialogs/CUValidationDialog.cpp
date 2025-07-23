@@ -48,6 +48,13 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 	{
 		case WM_INITDIALOG:
 		{
+			// "Highlander" Check: "There can be only one." -- Don't create multiple validator windows
+			if (g_hwndCUValidationDlg && (g_hwndCUValidationDlg != hwndDlg)) {
+				EndDialog(hwndDlg, 0);
+				DestroyWindow(hwndDlg);
+				return false;
+			}
+
 			// save HWND
 			g_hwndCUValidationDlg = hwndDlg;
 
@@ -280,7 +287,13 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 
 			EndDialog(hwndDlg, 0);
 			DestroyWindow(hwndDlg);
-			return true;
+
+			// clear the hwnd (but only if I'm the official "Highlander" dialog; leave it alone if I tried to usurp the original
+			if (g_hwndCUValidationDlg && (g_hwndCUValidationDlg == hwndDlg)) {
+				g_hwndCUValidationDlg = nullptr;	// I am going away, so am no longer the "Highlander"
+			}
+
+			return false;	// If an application processes this message, it should return zero.<https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-destroy>
 		}
 	}
 	return false;
