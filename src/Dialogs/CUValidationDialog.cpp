@@ -84,7 +84,7 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 				ComboBox_AddString(s_hwFileCbx, xmlName.c_str());
 			}
 			ComboBox_AddString(s_hwFileCbx, wsEphemeral.c_str());
-			ComboBox_SetCurSel(s_hwFileCbx, ComboBox_GetCount(s_hwFileCbx)-1);
+			ComboBox_SetCurSel(s_hwFileCbx, ComboBox_GetCount(s_hwFileCbx) - 1);
 
 			// Make sure Error listbox starts empty
 			ListBox_ResetContent(s_hwErrLbx);
@@ -276,22 +276,23 @@ INT_PTR CALLBACK ciDlgCUValidationProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, L
 		}
 		case WM_DESTROY:
 		{
-			if (g_pConfVal) {
-				delete g_pConfVal;
-				g_pConfVal = nullptr;
-			}
-			s_hwFileCbx = nullptr;
-			s_hwErrLbx = nullptr;
-
-			::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGREMOVE, reinterpret_cast<LPARAM>(hwndDlg));
-
-			EndDialog(hwndDlg, 0);
-			DestroyWindow(hwndDlg);
-
-			// clear the hwnd (but only if I'm the official "Highlander" dialog; leave it alone if I tried to usurp the original
+			// If this is the "real" Validator dialog (Highlander rule), then clear the stored dialog hwnd and config/button-hwnd
 			if (g_hwndCUValidationDlg && (g_hwndCUValidationDlg == hwndDlg)) {
 				g_hwndCUValidationDlg = nullptr;	// I am going away, so am no longer the "Highlander"
+
+				if (g_pConfVal) {
+					delete g_pConfVal;
+					g_pConfVal = nullptr;
+				}
+				s_hwFileCbx = nullptr;
+				s_hwErrLbx = nullptr;
+
+				// also only clear the modeless dialog handling if it's the real dialog
+				::SendMessage(nppData._nppHandle, NPPM_MODELESSDIALOG, MODELESSDIALOGREMOVE, reinterpret_cast<LPARAM>(hwndDlg));
 			}
+
+			EndDialog(hwndDlg, 0);
+			//DestroyWindow(hwndDlg);	// causes a recursion that the compiler presumably allowed to exit at some point
 
 			return false;	// If an application processes this message, it should return zero.<https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-destroy>
 		}
@@ -455,7 +456,7 @@ void _pushed_model_btn(HWND hwFileCbx, HWND hwErrorList, HWND /*hwModelBtn*/, st
 
 	// Because line-vs-element metadata isn't encoded with the parsed XML structure, I cannot extract the parent element's name
 	// Instead, based on the error context, I need to look for a different substring.
-	std::wstring wsContext = ((LB_ERR == lbCurSel)||(!pConfVal->nErrors)) ? L"<<NO CONTEXT>>" : pConfVal->vwsErrorContexts[lbCurSel];
+	std::wstring wsContext = ((LB_ERR == lbCurSel) || (!pConfVal->nErrors)) ? L"<<NO CONTEXT>>" : pConfVal->vwsErrorContexts[lbCurSel];
 	std::string sLocalSearch = "";
 	std::string sModelSearch = "";
 	int bWantAttr = 0;			// set to the offset for the _quoted_ attribute on the "model" searches that need to look for the a particular name="..." attribute for the given element
@@ -622,7 +623,8 @@ void _copy_current_errlbx_entry(HWND hwErrorList)
 	msg = std::wstring(L"Line#") + std::to_wstring(g_pConfVal->vlErrorLinenums[lbCurSel]) + L": ";
 	if (g_pConfVal->vwsErrorHumanReadable[lbCurSel].size()) {
 		msg += g_pConfVal->vwsErrorHumanReadable[lbCurSel] + L" (" + g_pConfVal->vwsErrorReasons[lbCurSel] + L")";
-	} else 
+	}
+	else
 	{
 		msg += g_pConfVal->vwsErrorReasons[lbCurSel];
 	}
@@ -643,7 +645,7 @@ void _copy_current_errlbx_entry(HWND hwErrorList)
 	if (SetClipboardData(CF_UNICODETEXT, hGlobal)) {
 		needFree = false;	// clipboard will take control of it, so I don't need to free it
 	}
-	
+
 cceeCloseAndExit:
 	if (needFree) GlobalFree(hGlobal);
 
@@ -747,7 +749,7 @@ INT_PTR CALLBACK ciDlgCUValHelpProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 			// Otherwise, it should return FALSE to prevent the system from setting the default keyboard focus.
 			return true;
 		}
-		case WM_COMMAND:	
+		case WM_COMMAND:
 		{
 			switch (LOWORD(wParam))
 			{
@@ -824,7 +826,7 @@ INT_PTR CALLBACK ciDlgCUValHelpProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 			msg += std::wstring(L"Old Map(Close): (") + std::to_wstring(rectClose.left) + L"," + std::to_wstring(rectClose.top) + L") ... (" + std::to_wstring(rectClose.right) + L"," + std::to_wstring(rectClose.bottom) + L") => " + std::to_wstring(w) + L"x" + std::to_wstring(h) + L"\r\n";
 
 			// Now convert gaps around it
-			RECT myCloseGaps = { 0, 0, 10 + 40, 231-200 };	// only want the gap from window.right to button-left (which is button.width to the left of the 10 DLU gap); and the gap between the bottom of the usable window and the top of the button
+			RECT myCloseGaps = { 0, 0, 10 + 40, 231 - 200 };	// only want the gap from window.right to button-left (which is button.width to the left of the 10 DLU gap); and the gap between the bottom of the usable window and the top of the button
 			MapDialogRect(hwndDlg, &myCloseGaps);
 			msg += std::wstring(L"Map(CloseGap: 50x31): (") + std::to_wstring(myCloseGaps.right) + L"x" + std::to_wstring(myCloseGaps.bottom) + L")\r\n";
 			new_x = newWidth - myCloseGaps.right;
