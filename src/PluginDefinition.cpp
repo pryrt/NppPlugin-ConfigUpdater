@@ -36,8 +36,14 @@ FuncItem funcItem[nbFunc];
 
 //
 // The data of Notepad++ that you can use in your plugin commands
+//      Pryrt note: this is automatically initialized by the plugin system
+//          but was not natively shared in PluginDefinition.h, so I added it
+//          (but not before I did `extern NppData nppData` in many places)
+//          But I'm going to try to incorporate it into a global instance
+//          of my NppMetaInfo object, to give me much more interesting info
 //
 NppData nppData;
+
 
 //
 // Initialize your plugin data here

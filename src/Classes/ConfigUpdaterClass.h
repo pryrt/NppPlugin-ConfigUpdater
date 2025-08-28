@@ -10,6 +10,7 @@
 #include <pathcch.h>
 #include <shlwapi.h>
 #include "PluginDefinition.h"
+#include "NppMetaClass.h"
 #include "menuCmdID.h"
 #include "tinyxml2.h"
 #include "CUStatusDialog.h"
@@ -74,7 +75,6 @@ private:
 	bool _setting_isIntermediateSorted = false;																										// from settings file, whether or not to generate an intermediate "sorted" file, which has no additions/fixes, but is in same order as final file
 	bool _doStopValidationPester = false;																											// set this true to stop pestering the user with validation errors
 
-	bool _is_dir_writable(const std::wstring& path);																								// checks if a given directory is writeable
 	std::wstring _getWritableTempDir(void);																											// gets a reasonable directory for a Temp file
 	bool _ask_dir_permissions(const std::wstring& path);																							// tests if writable, and asks for UAC if not
 	bool _ask_rerun_normal(void);																													// tests if Admin, and asks to restart normally; if not, asks if you want to restart to have it take effect
@@ -103,7 +103,7 @@ private:
 			}
 			::MessageBoxA(NULL, sMsg.c_str(), "XML Error", MB_ICONWARNING | MB_OK);
 			if (p_doc!=NULL && p_doc->ErrorLineNum() && wsFilePath.size()) {
-				if (::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsFilePath.c_str()))) {
+				if (::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsFilePath.c_str()))) {
 					extern NppData nppData;	// not in PluginDefinition.h
 
 					// Get the current scintilla
@@ -128,25 +128,5 @@ private:
 		}
 		return false;
 	};
-
-	////////////////////////////////
-	// Npp Metadata
-	////////////////////////////////
-
-	void _populateNppDirs(void);
-	std::wstring _askSettingsDir(void);
-	std::wstring
-		_nppAppDir,
-		_nppAppThemesDir,
-		_nppExePath,
-		_nppCfgDir,
-		_nppCfgPluginConfigDir,
-		_nppCfgPluginConfigMyDir,
-		_nppCfgUdlDir,
-		_nppCfgFunctionListDir,
-		_nppCfgAutoCompletionDir,
-		_nppCfgThemesDir;
-
-	HWND _hwndNPP;
 };
 

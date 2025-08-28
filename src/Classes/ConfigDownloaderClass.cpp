@@ -1,23 +1,15 @@
 #include "ConfigDownloaderClass.h"
 #include "pcjHelper.h"
-
-extern NppData nppData;
+#include "NppMetaClass.h"
 
 std::wstring _dl_errmsg = L"";
 
 ConfigDownloader::ConfigDownloader(void)
 {
-	pNppData = &nppData;
-
-	// get the app directory
-	std::wstring exeDir(MAX_PATH, '\0');
-	::SendMessage(pNppData->_nppHandle, NPPM_GETNPPDIRECTORY, MAX_PATH, reinterpret_cast<LPARAM>(exeDir.data()));
-	pcjHelper::delNull(exeDir);
-
-	// use that directory to populate the full paths for the model files
-	_wsPath.AppDir = exeDir;
-	_wsPath.LangsModel = exeDir + L"\\langs.model.xml";
-	_wsPath.StylersModel = exeDir + L"\\stylers.model.xml";
+	gNppMetaInfo.populate();	// find the directories to populate the full paths for the model files
+	_wsPath.AppDir = gNppMetaInfo.dir.app;
+	_wsPath.LangsModel = gNppMetaInfo.dir.app + L"\\langs.model.xml";
+	_wsPath.StylersModel = gNppMetaInfo.dir.app + L"\\stylers.model.xml";
 
 	// init the URLs:
 	_wsURL.LangsModel = L"https://raw.githubusercontent.com/notepad-plus-plus/notepad-plus-plus/refs/heads/master/PowerEditor/src/langs.model.xml";
@@ -59,7 +51,7 @@ bool ConfigDownloader::go(void)
 	if (cu_dl_model_GetInterruptFlag()) return false;
 
 	// prepare the copy command
-	LPCWSTR verb = _is_dir_writable(_wsPath.AppDir) ? nullptr : L"runas";	// want to be able to be NULL, so leave this as LPCWSTR
+	LPCWSTR verb = pcjHelper::is_dir_writable(_wsPath.AppDir) ? nullptr : L"runas";	// want to be able to be NULL, so leave this as LPCWSTR
 	std::wstring cmd = L"cmd.exe";
 	std::wstring args = L"/C ";	// start with uninitialized number of copies
 
@@ -72,9 +64,9 @@ bool ConfigDownloader::go(void)
 
 	// run the move, with the right verb
 	if (langs_ok || stylers_ok) {
-		ShellExecute(pNppData->_nppHandle, verb, cmd.c_str(), args.c_str(), NULL, SW_SHOWMINIMIZED);
+		ShellExecute(gNppMetaInfo.hwnd._nppHandle, verb, cmd.c_str(), args.c_str(), NULL, SW_SHOWMINIMIZED);
 	}
-	
+
 	// DONE
 	cu_dl_model_SetProgress(100);
 	cu_dl_model_AppendText(L"DONE");
@@ -91,7 +83,7 @@ bool ConfigDownloader::ask_overwrite_if_exists(const std::wstring& path)
 {
 	if (!PathFileExists(path.c_str())) return true;	// if file doesn't exist, it's okay to "overwrite" nothing ;-)
 	std::wstring msg = L"The path\r\n" + path + L"\r\nalready exists.  Should I overwrite it?";
-	int ans = ::MessageBox(pNppData->_nppHandle, msg.c_str(), L"Overwrite File?", MB_YESNO);
+	int ans = ::MessageBox(gNppMetaInfo.hwnd._nppHandle, msg.c_str(), L"Overwrite File?", MB_YESNO);
 	return ans == IDYES;
 }
 
@@ -209,26 +201,6 @@ bool ConfigDownloader::downloadFileToDisk(const std::wstring& url, const std::ws
 	return true;
 }
 
-bool ConfigDownloader::_is_dir_writable(const std::wstring& path)
-{
-	std::wstring tmpFileName = path;
-	pcjHelper::delNull(tmpFileName);
-	tmpFileName += L"\\~$TMPFILE.PRYRT";
-
-	HANDLE hFile = CreateFile(tmpFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE) {
-		DWORD errNum = GetLastError();
-		if (errNum != ERROR_ACCESS_DENIED) {
-			std::wstring errmsg = L"Error when testing if \"" + path + L"\" is writeable: " + std::to_wstring(GetLastError()) + L"\n";
-			::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
-		}
-		return false;
-	}
-	CloseHandle(hFile);
-	DeleteFile(tmpFileName.c_str());
-	return true;
-}
-
 std::wstring ConfigDownloader::getWritableTempDir(void)
 {
 	// first try the system TEMP
@@ -237,17 +209,17 @@ std::wstring ConfigDownloader::getWritableTempDir(void)
 	pcjHelper::delNull(tempDir);
 
 	// if that fails, try c:\tmp or c:\temp
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir = L"c:\\temp";
 		pcjHelper::delNull(tempDir);
 	}
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir = L"c:\\tmp";
 		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, try the %USERPROFILE%
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		if (!ExpandEnvironmentStrings(L"%USERPROFILE%", const_cast<LPWSTR>(tempDir.data()), MAX_PATH + 1)) {
 			std::wstring errmsg = L"getWritableTempDir::ExpandEnvirontmentStrings(%USERPROFILE%) failed: " + std::to_wstring(GetLastError()) + L"\n";
@@ -258,14 +230,14 @@ std::wstring ConfigDownloader::getWritableTempDir(void)
 	}
 
 	// last try: current directory
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		GetCurrentDirectory(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
 		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, no other ideas
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		std::wstring errmsg = L"getWritableTempDir() cannot find any writable directory; please make sure %TEMP% is defined and writable\n";
 		::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
 		return L"";

@@ -1,5 +1,6 @@
 #include "pcjHelper.h"
-#include <Windows.h>
+#include <pathcch.h>
+#include <shlwapi.h>
 
 namespace pcjHelper
 {
@@ -46,5 +47,54 @@ namespace pcjHelper
 		if (result == 0) return std::wstring();
 		return wstr;
 	}
+
+	// recursively create all levels necessary for a given directory
+	BOOL RecursiveCreateDirectory(std::wstring wsPath)
+	{
+		std::wstring wsParent = wsPath;
+		PathRemoveFileSpec(const_cast<LPWSTR>(wsParent.data()));
+		if (!PathFileExists(wsParent.c_str())) {
+			BOOL stat = RecursiveCreateDirectory(wsParent);
+			if (!stat) return stat;
+		}
+		return CreateDirectory(wsPath.c_str(), NULL);
+	}
+
+	// checks if a given directory is writeable
+	bool is_dir_writable(const std::wstring& path)
+	{
+		// first, grab the directory and make sure it exists
+		std::wstring tmpFileDir = path;
+		pcjHelper::delNull(tmpFileDir);
+
+		if (!PathFileExists(tmpFileDir.c_str())) {
+			BOOL stat = RecursiveCreateDirectory(tmpFileDir);
+			if (!stat) {
+				DWORD errNum = GetLastError();
+				if (errNum != ERROR_ACCESS_DENIED) {
+					std::wstring errmsg = L"Could not find or create directory for \"" + path + L"\": " + std::to_wstring(GetLastError()) + L"\n";
+					::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
+				}
+				return false;
+			}
+		}
+
+		// once it exists, move on to trying to write a file in that directory
+		std::wstring tmpFileName = tmpFileDir + L"\\~$TMPFILE.PRYRT";
+
+		HANDLE hFile = CreateFile(tmpFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile == INVALID_HANDLE_VALUE) {
+			DWORD errNum = GetLastError();
+			if (errNum != ERROR_ACCESS_DENIED) {
+				std::wstring errmsg = L"Error when testing if \"" + path + L"\" is writeable: " + std::to_wstring(GetLastError()) + L"\n";
+				::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
+			}
+			return false;
+		}
+		CloseHandle(hFile);
+		DeleteFile(tmpFileName.c_str());
+		return true;
+	}
+
 
 };
