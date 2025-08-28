@@ -10,6 +10,7 @@
 #include "PluginDefinition.h"
 #include "menuCmdID.h"
 #include "CUValidationDialog.h"
+#include "NppMetaClass.h"
 
 class ConfigValidator {
 public:
@@ -20,7 +21,7 @@ public:
 	std::vector<std::wstring>& getXmlNames(void) { return _xmlNames; };	// retrieve the XML Names vector
 	std::vector<std::wstring>& getXmlPaths(void) { return _xmlPaths; };	// retrieve the XML Paths vector
 	std::vector<std::wstring>& getXsdPaths(void) { return _xsdPaths; };	// retrieve the XSD Paths vector
-	HWND getNppHwnd(void) { return _npp.hwnd._nppHandle; }				// retrieve the NPP HWND
+	HWND getNppHwnd(void) { return gNppMetaInfo.hwnd._nppHandle; }				// retrieve the NPP HWND
 	HWND getActiveScintilla(void) { return _hwActiveScintilla(); }		// retrieve the Active Scintilla HWND
 	std::wstring getNppDir(std::wstring wsWhichDir);					// retrieve one of the directories
 
@@ -40,32 +41,7 @@ private:
 	// Private Helpers
 	////////////////////////////////
 
-	// delete NULL characters at end of wstring
-	std::wstring _delNull(std::wstring& str);
-
 	// get the active scintilla handle
 	HWND _hwActiveScintilla(void);
-
-	////////////////////////////////
-	// Npp Metadata
-	////////////////////////////////
-	void _populateNppMetadata(NppData& origNppData);	// using the HWND information, poll N++ for the correct directory information and other metadata
-	std::wstring _askSettingsDir(void);					// contains all the logic and calls to get the -settingsDir from N++ (since there isn't an easy message)
-	struct {
-		NppData hwnd;
-		struct {
-			std::wstring
-				app,
-				appThemes,
-				appExePath,
-				cfg,
-				cfgPluginConfig,
-				cfgPluginConfigMyDir,
-				cfgUdl,
-				cfgFunctionList,
-				cfgAutoCompletion,
-				cfgThemes;
-		} dir;
-	} _npp;
 
 };

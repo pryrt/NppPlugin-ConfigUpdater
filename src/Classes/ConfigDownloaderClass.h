@@ -23,7 +23,6 @@ public:
 	bool go(void);
 
 private:
-	NppData* pNppData;
 	struct {
 		std::wstring
 			AppDir,				// path for the application's directory
@@ -36,7 +35,6 @@ private:
 			StylersModel;		// URL for the most recent stylers.model.xml
 	} _wsURL;
 
-	bool ConfigDownloader::_is_dir_writable(const std::wstring& path);
 	std::wstring getWritableTempDir(void);
 	bool downloadFileToDisk(const std::wstring& url, const std::wstring& path);
 	bool ask_overwrite_if_exists(const std::wstring& path);

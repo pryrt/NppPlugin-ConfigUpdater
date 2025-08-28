@@ -85,7 +85,7 @@ extern NppData nppData;
 extern FuncItem funcItem[nbFunc];
 
 //
-// My global variables
+// My external global variables
 //
 
 extern HWND g_hwndAboutDlg;

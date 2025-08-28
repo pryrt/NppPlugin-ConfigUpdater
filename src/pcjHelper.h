@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <Windows.h>
 
 namespace pcjHelper
 {
@@ -12,5 +13,12 @@ namespace pcjHelper
 
 	// convert UTF8-encoded bytes in std::string to std::wstring
 	std::wstring utf8_to_wstring(std::string& str);
+
+	// recursively create all levels necessary for a given directory
+	BOOL RecursiveCreateDirectory(std::wstring wsPath);
+
+	// checks if a given directory is writeable
+	bool is_dir_writable(const std::wstring& path);
+
 };
 

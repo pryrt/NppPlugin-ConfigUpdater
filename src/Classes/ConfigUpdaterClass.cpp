@@ -6,46 +6,11 @@
 extern NppData nppData;
 std::wstring wsConsoleFilePath;
 
-bool ConfigUpdater::_is_dir_writable(const std::wstring& path)
-{
-	// first, grab the directory and make sure it exists
-	std::wstring tmpFileDir = path;
-	pcjHelper::delNull(tmpFileDir);
-
-	if (!PathFileExists(tmpFileDir.c_str())) {
-		BOOL stat = PopulateXSD::RecursiveCreateDirectory(tmpFileDir);
-		if (!stat) {
-			DWORD errNum = GetLastError();
-			if (errNum != ERROR_ACCESS_DENIED) {
-				std::wstring errmsg = L"Could not find or create directory for \"" + path + L"\": " + std::to_wstring(GetLastError()) + L"\n";
-				::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
-			}
-			return false;
-		}
-	}
-
-	// once it exists, move on to trying to write a file in that directory
-	std::wstring tmpFileName = tmpFileDir + L"\\~$TMPFILE.PRYRT";
-
-	HANDLE hFile = CreateFile(tmpFileName.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE) {
-		DWORD errNum = GetLastError();
-		if (errNum != ERROR_ACCESS_DENIED) {
-			std::wstring errmsg = L"Error when testing if \"" + path + L"\" is writeable: " + std::to_wstring(GetLastError()) + L"\n";
-			::MessageBox(NULL, errmsg.c_str(), L"Directory error", MB_ICONERROR);
-		}
-		return false;
-	}
-	CloseHandle(hFile);
-	DeleteFile(tmpFileName.c_str());
-	return true;
-}
-
 // tests if writable, and asks for UAC if not; returns true only when writable
 bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 {
 	if (_doAbort) return false;
-	if (_is_dir_writable(path)) return true;
+	if (pcjHelper::is_dir_writable(path)) return true;
 	if (_isAskRestartCancelled) {
 		_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Not asking if you want UAC, because you previously chose CANCEL.");
 		return false;	// don't need to ask if already cancelled
@@ -55,7 +20,7 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 		+ L"- NO = Do not exit Notepad++ for now, but ask again if permissions still needed.\n"
 		+ L"- CANCEL = Do not exit Notepad++ for now, and don't ask me again.\n\n"
 		+ L"(don't forget to rerun Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts.";
-	int res = ::MessageBox(_hwndNPP, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
+	int res = ::MessageBox(gNppMetaInfo.hwnd._nppHandle, msg.c_str(), L"Directory Not Writable", MB_YESNOCANCEL);
 	switch (res) {
 		case IDNO:
 			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Do not prompt for UAC.");
@@ -68,19 +33,19 @@ bool ConfigUpdater::_ask_dir_permissions(const std::wstring& path)
 			_isAskRestartYes = false;
 			break;
 		case IDYES:
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+			::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 			_consoleWrite(std::wstring(L"! Directory '") + path + L"' not writable.  Will prompt for UAC.");
 			_consoleWrite(std::wstring(L"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n!!!!! Run Plugins > ConfigUpdater > Update Config Files after Notepad++ restarts !!!!!\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n"));
 			_isAskRestartCancelled = false;
 			_isAskRestartYes = true;
 			// prompt for UAC
-			size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+			size_t szLen = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTCMDLINE, 0, 0);
 			std::wstring wsArgs(szLen + 1, '\0');
-			size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+			size_t szGot = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
 			if (!szGot) wsArgs = L"";
-			std::wstring wsRun = std::wstring(L"/C ECHO Wait 5sec while old N++ closes & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+			std::wstring wsRun = std::wstring(L"/C ECHO Wait 5sec while old N++ closes & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + gNppMetaInfo.dir.appExePath + L"\" " + wsArgs;
 			ShellExecute(0, L"runas", L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWDEFAULT);	/* SW_SHOWMINIMIZED */
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+			::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 			break;
 	}
 	return false;
@@ -117,15 +82,15 @@ bool ConfigUpdater::_ask_rerun_normal(void)
 	}
 
 	// ask about restart, whether elevated or not
-	int res = ::MessageBox(_hwndNPP, msg.c_str(), ttl.c_str(), MB_YESNO);
+	int res = ::MessageBox(gNppMetaInfo.hwnd._nppHandle, msg.c_str(), ttl.c_str(), MB_YESNO);
 	switch (res) {
 		case IDYES: {
 			// derive new command line string
-			size_t szLen = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
+			size_t szLen = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTCMDLINE, 0, 0);
 			std::wstring wsArgs(szLen + 1, '\0');
-			size_t szGot = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
+			size_t szGot = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTCMDLINE, static_cast<WPARAM>(szLen + 1), reinterpret_cast<LPARAM>(wsArgs.data()));
 			if (!szGot) wsArgs = L"";
-			std::wstring wsRun = std::wstring(L"/C echo Wait 5sec while old N++ exits. & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + _nppExePath + L"\" " + wsArgs;
+			std::wstring wsRun = std::wstring(L"/C echo Wait 5sec while old N++ exits. & TIMEOUT /T 5 & START \"Launch N++\" /B \"") + gNppMetaInfo.dir.appExePath + L"\" " + wsArgs;
 
 			// cannot use ShellExecute, because it doesn't de-elevate :-(
 			//// ShellExecute(0, NULL, L"cmd.exe", wsRun.c_str(), NULL, SW_SHOWMINIMIZED);
@@ -169,7 +134,7 @@ bool ConfigUpdater::_ask_rerun_normal(void)
 			delete[](char*)p;
 			CloseHandle(process);
 
-			::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
+			::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_MENUCOMMAND, 0, IDM_FILE_EXIT);
 			return true;
 		}
 		case IDNO:
@@ -187,17 +152,17 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 	pcjHelper::delNull(tempDir);
 
 	// if that fails, try c:\tmp or c:\temp
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir = L"c:\\temp";
 		pcjHelper::delNull(tempDir);
 	}
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir = L"c:\\tmp";
 		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, try the %USERPROFILE%
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		if (!ExpandEnvironmentStrings(L"%USERPROFILE%", const_cast<LPWSTR>(tempDir.data()), MAX_PATH + 1)) {
 			std::wstring errmsg = L"_getWritableTempDir::ExpandEnvirontmentStrings(%USERPROFILE%) failed: " + std::to_wstring(GetLastError()) + L"\n";
@@ -208,14 +173,14 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 	}
 
 	// last try: current directory
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		tempDir.resize(MAX_PATH + 1);
 		GetCurrentDirectory(MAX_PATH + 1, const_cast<LPWSTR>(tempDir.data()));
 		pcjHelper::delNull(tempDir);
 	}
 
 	// if that fails, no other ideas
-	if (!_is_dir_writable(tempDir)) {
+	if (!pcjHelper::is_dir_writable(tempDir)) {
 		std::wstring errmsg = L"_getWritableTempDir() cannot find any writable directory; please make sure %TEMP% is defined and writable\n";
 		::MessageBox(NULL, errmsg.c_str(), L"Directory Error", MB_ICONERROR);
 		return L"";
@@ -227,7 +192,7 @@ std::wstring ConfigUpdater::_getWritableTempDir(void)
 //		Consumer is required to CloseHandle() when done writing
 HANDLE ConfigUpdater::_consoleCheck()
 {
-	wsConsoleFilePath = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterLog";
+	wsConsoleFilePath = gNppMetaInfo.dir.cfgPluginConfigMyDir + L"\\ConfigUpdaterLog";
 
 	// whether the file exists or not, need to open it for Append
 	HANDLE hConsoleFile = CreateFile(
@@ -278,7 +243,7 @@ void ConfigUpdater::_consoleWrite(LPCSTR cStr)
 	BOOL bWriteOK = ::WriteFile(hConsoleFile, cStr, static_cast<DWORD>(strlen(cStr)), &dwNBytesWritten, NULL);
 	if (!bWriteOK) {
 		std::wstring msg = std::wstring(L"Problem writing to ConfigUpdaterLog: ") + std::to_wstring(GetLastError());
-		::MessageBox(_hwndNPP, msg.c_str(), L"Logging Error", MB_ICONWARNING);
+		::MessageBox(gNppMetaInfo.hwnd._nppHandle, msg.c_str(), L"Logging Error", MB_ICONWARNING);
 	}
 	CloseHandle(hConsoleFile);
 }
@@ -289,13 +254,12 @@ void ConfigUpdater::_consoleWrite(tinyxml2::XMLNode* pNode)
 	_consoleWrite(printer.CStr());
 }
 
-ConfigUpdater::ConfigUpdater(HWND hwndNpp)
+ConfigUpdater::ConfigUpdater(HWND /*hwndNpp*/ )
 {
-	_hwndNPP = hwndNpp;
-	_populateNppDirs();
+	gNppMetaInfo.populate();
 	_initInternalState();
 	_createPluginSettingsIfNeeded();
-	_deleteOldFileIfNeeded(_nppCfgPluginConfigDir + L"\\ConfigUpdaterLog");	// don't keep logfile if it's in the old location
+	_deleteOldFileIfNeeded(gNppMetaInfo.dir.cfgPluginConfig + L"\\ConfigUpdaterLog");	// don't keep logfile if it's in the old location
 };
 
 void ConfigUpdater::_deleteOldFileIfNeeded(std::wstring fname)
@@ -319,7 +283,7 @@ void ConfigUpdater::_initInternalState(void)
 void ConfigUpdater::_initThemeValidatorXSD(void)
 {
 	// Define the filename variable
-	_wsThemeValidatorXsdFileName = _nppCfgPluginConfigMyDir + L"\\theme.xsd";
+	_wsThemeValidatorXsdFileName = gNppMetaInfo.dir.cfgPluginConfigMyDir + L"\\theme.xsd";
 
 	// the WriteThemeXSD has recursive-directory-creator, so don't need to Make sure that the config directory exists before calling that
 	if (!PathFileExists(_wsThemeValidatorXsdFileName.c_str())) {
@@ -331,7 +295,7 @@ void ConfigUpdater::_initThemeValidatorXSD(void)
 void ConfigUpdater::_initLangsValidatorXSD(void)
 {
 	// Define the filename variable
-	_wsLangsValidatorXsdFileName = _nppCfgPluginConfigMyDir + L"\\langs.xsd";
+	_wsLangsValidatorXsdFileName = gNppMetaInfo.dir.cfgPluginConfigMyDir + L"\\langs.xsd";
 
 	// the WriteLangsXSD has recursive-directory-creator, so don't need to Make sure that the config directory exists before calling that
 	if (!PathFileExists(_wsLangsValidatorXsdFileName.c_str())) {
@@ -343,13 +307,13 @@ void ConfigUpdater::_initLangsValidatorXSD(void)
 // creates the plugin's config file if it dooesn't exist
 void ConfigUpdater::_createPluginSettingsIfNeeded(void)
 {
-	std::wstring wsPluginConfigOld = _nppCfgPluginConfigDir + L"\\ConfigUpdaterSettings.xml";
-	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigOld = gNppMetaInfo.dir.cfgPluginConfig + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigFile = gNppMetaInfo.dir.cfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
 	std::string sPluginConfigFile8 = pcjHelper::wstring_to_utf8(wsPluginConfigFile);
 
 	// Make sure that the config directory exists
-	if (!PathFileExists(_nppCfgPluginConfigMyDir.c_str())) {
-		BOOL stat = CreateDirectory(_nppCfgPluginConfigMyDir.c_str(), NULL);
+	if (!PathFileExists(gNppMetaInfo.dir.cfgPluginConfigMyDir.c_str())) {
+		BOOL stat = CreateDirectory(gNppMetaInfo.dir.cfgPluginConfigMyDir.c_str(), NULL);
 		if (!stat) return;	// cannot do the next checks if I cannot create it
 	}
 
@@ -385,7 +349,7 @@ void ConfigUpdater::_createPluginSettingsIfNeeded(void)
 // reads the plugin's config file
 void ConfigUpdater::_readPluginSettings(void)
 {
-	std::wstring wsPluginConfigFile = _nppCfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
+	std::wstring wsPluginConfigFile = gNppMetaInfo.dir.cfgPluginConfigMyDir + L"\\ConfigUpdaterSettings.xml";
 	std::string sPluginConfigFile8 = pcjHelper::wstring_to_utf8(wsPluginConfigFile);
 
 	_createPluginSettingsIfNeeded();
@@ -410,138 +374,6 @@ void ConfigUpdater::_readPluginSettings(void)
 	}
 	_setting_isIntermediateSorted = pSearch->IntAttribute("isIntermediateSorted");
 }
-
-void ConfigUpdater::_populateNppDirs(void)
-{
-	////////////////////////////////
-	// Get the directory which stores the executable
-	////////////////////////////////
-	std::wstring exeDir(MAX_PATH, '\0');
-	::SendMessage(_hwndNPP, NPPM_GETNPPDIRECTORY, MAX_PATH, reinterpret_cast<LPARAM>(exeDir.data()));
-	pcjHelper::delNull(exeDir);
-	// and the excecutable file path (including `\notepad++.exe`)
-	std::wstring exePath(MAX_PATH, '\0');
-	LRESULT szExe = ::SendMessage(_hwndNPP, NPPM_GETNPPFULLFILEPATH, 0, reinterpret_cast<LPARAM>(exePath.data()));
-	if (szExe) {
-		pcjHelper::delNull(exePath);
-		_nppExePath = exePath;
-	}
-
-	////////////////////////////////
-	// Get the AppData or Portable folders, as being relative to the plugins/Config directory
-	////////////////////////////////
-
-	// %AppData%\Notepad++\Plugins\Config or equiv
-	LRESULT sz = 1 + ::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, 0, NULL);
-	std::wstring pluginCfgDir(sz, '\0');
-	::SendMessage(_hwndNPP, NPPM_GETPLUGINSCONFIGDIR, sz, reinterpret_cast<LPARAM>(pluginCfgDir.data()));
-	pcjHelper::delNull(pluginCfgDir);
-	_nppCfgPluginConfigDir = pluginCfgDir;
-	_nppCfgPluginConfigMyDir = pluginCfgDir + L"\\ConfigUpdater";
-
-	// %AppData%\Notepad++\Plugins or equiv
-	//		since it's removing the tail, it will never be longer than pluginCfgDir; since it's in-place, initialize with the first
-	std::wstring pluginDir = pluginCfgDir;
-	PathCchRemoveFileSpec(const_cast<PWSTR>(pluginDir.data()), pluginCfgDir.size());
-	pcjHelper::delNull(pluginDir);
-
-	// %AppData%\Notepad++ or equiv is what I'm really looking for
-	// _nppCfgDir				#py# _nppConfigDirectory = os.path.dirname(os.path.dirname(notepad.getPluginConfigDir()))
-	_nppCfgDir = pluginDir;
-	PathCchRemoveFileSpec(const_cast<PWSTR>(_nppCfgDir.data()), pluginDir.size());
-	pcjHelper::delNull(_nppCfgDir);
-
-	// Save this version, because Cloud/SettingsDir will overwrite _npp.dir.cfg, but I will still need to be able to fall back to the AppData||Portable
-	std::wstring appDataOrPortableDir = _nppCfgDir;
-
-	////////////////////////////////
-	// Check for cloud and -settingsDir config-override locations
-	////////////////////////////////
-	bool usesCloud = false;
-	sz = ::SendMessage(_hwndNPP, NPPM_GETSETTINGSONCLOUDPATH, 0, 0); // get number of wchars in settings-on-cloud path (0 means settings-on-cloud is disabled)
-	if (sz) {
-		usesCloud = true;
-		std::wstring wsCloudDir(sz + 1, '\0');
-		LRESULT szGot = ::SendMessage(_hwndNPP, NPPM_GETSETTINGSONCLOUDPATH, sz + 1, reinterpret_cast<LPARAM>(wsCloudDir.data()));
-		if (szGot == sz) {
-			pcjHelper::delNull(wsCloudDir);
-			_nppCfgDir = wsCloudDir;
-		}
-	}
-
-	// -settingsDir: if command-line option is enabled, use that directory for some config files
-	bool usesSettingsDir = false;
-	std::wstring wsSettingsDir = _askSettingsDir();
-	if (wsSettingsDir.length() > 0)
-	{
-		usesSettingsDir = true;
-		_nppCfgDir = wsSettingsDir;
-	}
-
-	////////////////////////////////
-	// Now that we've got all the info, decide on final locations for Function List, UDL, and Themes;
-	// AutoCompletion is always relative to executable directory
-	////////////////////////////////
-
-	// FunctionList: must be AppData or PortableDir, because FL does NOT work in Cloud or Settings directory
-	// _nppCfgFunctionListDir	#py# _nppCfgFunctionListDirectory = os.path.join(_nppConfigDirectory, 'functionList')
-	_nppCfgFunctionListDir = _nppCfgDir + L"\\functionList";
-
-	// UDL: follows SettingsDir >> Cloud Dir >> Portable >> AppData
-	// _nppCfgUdlDir			#py# _nppCfgUdlDirectory = os.path.join(_nppConfigDirectory, 'userDefineLangs')
-	_nppCfgUdlDir = _nppCfgDir + L"\\userDefineLangs";
-
-	// THEMES: does NOT follow SettingsDir (might be a N++ bug, but must live with what IS, not what SHOULD BE); DOES follow Cloud Dir >> Portable >> AppData
-	// _nppCfgThemesDir			#py# _nppCfgThemesDirectory = os.path.join(_nppConfigDirectory, 'themes')
-	_nppCfgThemesDir = (usesSettingsDir ? appDataOrPortableDir : _nppCfgDir) + L"\\themes";
-
-	// AutoCompletion is _always_ relative to notepad++.exe, never in AppData or CloudConfig or SettingsDir
-	// _nppCfgAutoCompletionDir	#py# _nppAppAutoCompletionDirectory = os.path.join(notepad.getNppDir(), 'autoCompletion')
-	_nppCfgAutoCompletionDir = exeDir + L"\\autoCompletion";
-
-	// also, want to save the app directory and the themes relative to the app (because themes can be found in _both_ locations)
-	_nppAppDir = exeDir;
-	_nppAppThemesDir = _nppAppDir + L"\\themes";
-
-	return;
-}
-
-// Parse the -settingsDir out of the current command line
-//	FUTURE: if a future version of N++ includes PR#16946, then do an "if version>vmin, use new message" section in the code
-std::wstring ConfigUpdater::_askSettingsDir(void)
-{
-	LRESULT sz = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, 0, 0);
-	if (!sz) return L"";
-	std::wstring strCmdLine(sz + 1, L'\0');
-	LRESULT got = ::SendMessage(_hwndNPP, NPPM_GETCURRENTCMDLINE, sz + 1, reinterpret_cast<LPARAM>(strCmdLine.data()));
-	if (got != sz) return L"";
-	pcjHelper::delNull(strCmdLine);
-
-	std::wstring wsSettingsDir = L"";
-	size_t p = 0;
-	if ((p = strCmdLine.find(L"-settingsDir=")) != std::wstring::npos) {
-		std::wstring wsEnd = L" ";
-		// start by grabbing from after the = to the end of the string
-		wsSettingsDir = strCmdLine.substr(p + 13, strCmdLine.length() - p - 13);
-		if (wsSettingsDir[0] == L'"') {
-			wsSettingsDir = wsSettingsDir.substr(1, wsSettingsDir.length() - 1);
-			wsEnd = L"\"";
-		}
-		p = wsSettingsDir.find(wsEnd);
-		if (p != std::wstring::npos) {
-			// found the ending space or quote, so do everything _before_ that (need last position=p-1, which means a count of p)
-			wsSettingsDir = wsSettingsDir.substr(0, p);
-		}
-		else if (wsEnd == L"\"") {
-			// could not find end quote; should probably throw an error or something, but for now, just pretend I found nothing...
-			return L"";
-		}	// none found and looking for space means it found end-of-string, which is fine with the space separator
-	}
-
-	return wsSettingsDir;
-}
-
-
 
 // timestamp the console
 void ConfigUpdater::_consoleTimestamp(void)
@@ -571,22 +403,22 @@ void ConfigUpdater::_consoleTruncate(void)
 	}
 
 	// file should exist now, because of CreateFile, so need to open it
-	LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
+	LRESULT status = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
 	if (!status)
 		return;
 
 	// save the bufferID for future use
-	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
+	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTBUFFERID, 0, 0));
 
 	// nothing to do if there's a problem opening the file
 	if (!_uOutBufferID)
 		return;
 
 	// make sure it's up-to-date
-	::SendMessage(_hwndNPP, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
+	::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
 
 	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
-	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+	::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
 
 	// Get the current scintilla
 	int which = -1;
@@ -612,12 +444,12 @@ void ConfigUpdater::_consoleTruncate(void)
 			::SendMessage(curScintilla, SCI_DELETERANGE, 0, found_position);
 
 			// save edits
-			::SendMessage(_hwndNPP, NPPM_SAVECURRENTFILE, 0, 0);
+			::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_SAVECURRENTFILE, 0, 0);
 		}
 	}
 
 	// Don't need the file open anymore.
-	::SendMessage(_hwndNPP, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
+	::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_MENUCOMMAND, 0, IDM_FILE_CLOSE);
 
 	// need to wait until file is actually closed (I really wish there were an NPPM command that waited for File>Close to complete, instead of having to MENUCOMMAND)
 	//	so keep polling the current file name, and keep looping as long as it's still ConfigUpdaterLog; once it changes, the file is done closing, and it's safe to move on
@@ -625,7 +457,7 @@ void ConfigUpdater::_consoleTruncate(void)
 	std::wstring wsFileName = bufFileName;
 	while (pcjHelper::delNull(wsFileName) == L"ConfigUpdaterLog") {
 		memset(bufFileName, 0, MAX_PATH);
-		::SendMessage(_hwndNPP, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
+		::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETFILENAME, MAX_PATH, reinterpret_cast<LPARAM>(bufFileName));
 		wsFileName = bufFileName;
 	}
 
@@ -645,22 +477,22 @@ void ConfigUpdater::_consoleShow(void)
 	}
 
 	// file should exist now, because of CreateFile, so need to open it
-	LRESULT status = ::SendMessage(_hwndNPP, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
+	LRESULT status = ::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_DOOPEN, 0, reinterpret_cast<LPARAM>(wsConsoleFilePath.c_str()));
 	if (!status)
 		return;
 
 	// save the bufferID for future use
-	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(_hwndNPP, NPPM_GETCURRENTBUFFERID, 0, 0));
+	_uOutBufferID = static_cast<UINT_PTR>(::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_GETCURRENTBUFFERID, 0, 0));
 
 	// nothing to do if there's a problem opening the file
 	if (!_uOutBufferID)
 		return;
 
 	// make sure it's up-to-date
-	::SendMessage(_hwndNPP, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
+	::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_RELOADBUFFERID, static_cast<WPARAM>(_uOutBufferID), false);
 
 	// make sure it's in ERRORLIST mode	// DON'T DO Monitoring (tail -f) mode ANY MORE
-	::SendMessage(_hwndNPP, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
+	::SendMessage(gNppMetaInfo.hwnd._nppHandle, NPPM_SETBUFFERLANGTYPE, static_cast<WPARAM>(_uOutBufferID), L_ERRORLIST);
 
 	// Get the current scintilla
 	int which = -1;
@@ -700,7 +532,7 @@ tinyxml2::XMLDocument* ConfigUpdater::_getModelStyler(void)
 {
 	tinyxml2::XMLDocument* pDoc = new tinyxml2::XMLDocument;
 	std::wstring fName = std::wstring(MAX_PATH, L'\0');
-	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, _nppAppDir.c_str(), L"stylers.model.xml");
+	PathCchCombine(const_cast<PWSTR>(fName.data()), MAX_PATH, gNppMetaInfo.dir.app.c_str(), L"stylers.model.xml");
 	pcjHelper::delNull(fName);
 	tinyxml2::XMLError eResult = pDoc->LoadFile(pcjHelper::wstring_to_utf8(fName).c_str());
 	if (_xml_check_result(eResult, pDoc, fName)) return pDoc;
@@ -743,7 +575,7 @@ tinyxml2::XMLElement* ConfigUpdater::_get_default_style_element(tinyxml2::XMLDoc
 void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 {
 	tinyxml2::XMLDocument* pModelStylerDoc = _getModelStyler();
-	_updateOneTheme(pModelStylerDoc, _nppCfgDir, L"stylers.xml", isIntermediateSorted, 10);	// stylers.xml is allocated 10%
+	_updateOneTheme(pModelStylerDoc, gNppMetaInfo.dir.cfg, L"stylers.xml", isIntermediateSorted, 10);	// stylers.xml is allocated 10%
 	if (_doAbort) return;	// need to abort
 
 
@@ -753,8 +585,8 @@ void ConfigUpdater::_updateAllThemes(bool isIntermediateSorted)
 
 	HANDLE fhFound;
 	WIN32_FIND_DATAW infoFound;
-	std::vector<std::wstring> themeDirs{ _nppCfgThemesDir, _nppAppThemesDir };
-	if (_nppCfgThemesDir == _nppAppThemesDir)
+	std::vector<std::wstring> themeDirs{ gNppMetaInfo.dir.cfgThemes, gNppMetaInfo.dir.appThemes };
+	if (gNppMetaInfo.dir.cfgThemes == gNppMetaInfo.dir.appThemes)
 		themeDirs.pop_back();
 
 	// need to count the themes
@@ -1307,14 +1139,14 @@ void ConfigUpdater::_updateLangs(bool isIntermediateSorted)
 	custatus_SetProgress(90);
 
 	// Prepare the filenames
-	std::string sFilenameLangsModel = pcjHelper::wstring_to_utf8(_nppAppDir) + "\\langs.model.xml";
-	std::string sFilenameLangsActive = pcjHelper::wstring_to_utf8(_nppCfgDir) + "\\langs.xml";
-	std::wstring wsFilenameLangsModel = _nppAppDir + L"\\langs.model.xml";
-	std::wstring wsFilenameLangsActive = _nppCfgDir + L"\\langs.xml";
+	std::string sFilenameLangsModel = pcjHelper::wstring_to_utf8(gNppMetaInfo.dir.app) + "\\langs.model.xml";
+	std::string sFilenameLangsActive = pcjHelper::wstring_to_utf8(gNppMetaInfo.dir.cfg) + "\\langs.xml";
+	std::wstring wsFilenameLangsModel = gNppMetaInfo.dir.app + L"\\langs.model.xml";
+	std::wstring wsFilenameLangsActive = gNppMetaInfo.dir.cfg + L"\\langs.xml";
 	_consoleWrite(std::string("--- Checking Language File: '") + sFilenameLangsActive + "'");
 
 	// check for permissions, exit function if cannot write
-	if (!_ask_dir_permissions(_nppCfgDir))
+	if (!_ask_dir_permissions(gNppMetaInfo.dir.cfg))
 	{
 		custatus_AppendText(const_cast<LPWSTR>(L"\t[NO PERMISSION]\r\n"));
 		return;
