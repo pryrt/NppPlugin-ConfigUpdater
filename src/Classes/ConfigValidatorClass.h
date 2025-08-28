@@ -50,6 +50,7 @@ private:
 	// Npp Metadata
 	////////////////////////////////
 	void _populateNppMetadata(NppData& origNppData);	// using the HWND information, poll N++ for the correct directory information and other metadata
+	std::wstring _askSettingsDir(void);					// contains all the logic and calls to get the -settingsDir from N++ (since there isn't an easy message)
 	struct {
 		NppData hwnd;
 		struct {
