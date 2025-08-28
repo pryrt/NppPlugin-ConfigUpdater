@@ -134,6 +134,7 @@ private:
 	////////////////////////////////
 
 	void _populateNppDirs(void);
+	std::wstring _askSettingsDir(void);
 	std::wstring
 		_nppAppDir,
 		_nppAppThemesDir,

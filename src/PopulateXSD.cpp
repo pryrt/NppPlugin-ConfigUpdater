@@ -1,15 +1,14 @@
 #include "PopulateXSD.h"
-#include <Windows.h>
 #include <shlwapi.h>
 
 namespace PopulateXSD {
     // private:
-    BOOL _RecursiveCreateDirectory(std::wstring wsPath)
+    BOOL RecursiveCreateDirectory(std::wstring wsPath)
     {
         std::wstring wsParent = wsPath;
         PathRemoveFileSpec(const_cast<LPWSTR>(wsParent.data()));
         if (!PathFileExists(wsParent.c_str())) {
-            BOOL stat = _RecursiveCreateDirectory(wsParent);
+            BOOL stat = RecursiveCreateDirectory(wsParent);
             if (!stat) return stat;
         }
         return CreateDirectory(wsPath.c_str(), NULL);
@@ -22,7 +21,7 @@ namespace PopulateXSD {
         PathRemoveFileSpec(const_cast<LPWSTR>(wsDir.data()));
 
         if (!PathFileExists(wsDir.c_str())) {
-            BOOL stat = _RecursiveCreateDirectory(wsDir.c_str());
+            BOOL stat = RecursiveCreateDirectory(wsDir.c_str());
             if (!stat) return;	// cannot write a file in that directory if directory does not exist
         }
 
