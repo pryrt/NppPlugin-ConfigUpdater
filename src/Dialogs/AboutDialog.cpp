@@ -20,6 +20,7 @@
 #include "AboutDialog.h"
 #include "PluginVersion.h"
 #include "Hyperlinks.h"
+#include "NppMetaClass.h"
 
 HWND g_hwndAboutDlg = nullptr;
 
@@ -39,11 +40,11 @@ INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 			g_hwndAboutDlg = hwndDlg;
 
 			// need to know versions for making darkMode decisions
-			LRESULT versionNpp = ::SendMessage(nppData._nppHandle, NPPM_GETNPPVERSION, 1, 0);	// HIWORD(nppVersion) = major version; LOWORD(nppVersion) = zero-padded minor (so 8|500 will come after 8|410)
-			LRESULT versionDarkDialog = MAKELONG(540, 8);		// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
+			gNppMetaInfo.populate();
+			LRESULT versionDarkDialog = gNppMetaInfo.verDotToLL(8, 5, 4, 0);	// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
 
 			bool isDM = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
-			if (isDM && (versionNpp >= versionDarkDialog)) {
+			if (isDM && gNppMetaInfo.isNppVerAtLeast(versionDarkDialog)) {
 				NppDarkMode::Colors myColors = { 0 };
 				if (::SendMessage(nppData._nppHandle, NPPM_GETDARKMODECOLORS, sizeof(NppDarkMode::Colors), reinterpret_cast<LPARAM>(&myColors))) {
 					SetHyperlinkRGB(myColors.linkText);
@@ -63,7 +64,7 @@ INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 			Edit_SetText(GetDlgItem(hwndDlg, IDC_VERSION), title);
 
 			// Now do subclass-and-them
-			if (isDM && versionNpp >= versionDarkDialog) {
+			if (isDM && gNppMetaInfo.isNppVerAtLeast(versionDarkDialog)) {
 				::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndAboutDlg));
 			}
 

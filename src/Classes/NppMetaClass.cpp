@@ -10,6 +10,7 @@ NppMetaInfo::NppMetaInfo(void)
 {
 	_isInitialized = false;
 	dir = { L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"" };
+	ver = 0;
 	return;
 }
 
@@ -18,6 +19,11 @@ NppMetaInfo::NppMetaInfo(void)
 void NppMetaInfo::populate(void)
 {
 	if (_isInitialized) return;
+
+	////////////////////////////////
+	// Get the Notepad++ version (HIWORD=maj, LOWORD=minor*100+sub*10+rev)
+	////////////////////////////////
+	ver = ::SendMessage(hwnd._nppHandle, NPPM_GETNPPVERSION, 1, 0);
 
 	////////////////////////////////
 	// Get the directory which stores the executable
@@ -60,28 +66,47 @@ void NppMetaInfo::populate(void)
 	// Save this version, because Cloud/SettingsDir will overwrite _npp.dir.cfg, but I will still need to be able to fall back to the AppData||Portable
 	dir.appDataEquiv = dir.cfg;
 
-	////////////////////////////////
-	// Check for cloud and -settingsDir config-override locations
-	////////////////////////////////
-	bool usesCloud = false;
-	sz = ::SendMessage(hwnd._nppHandle, NPPM_GETSETTINGSONCLOUDPATH, 0, 0); // get number of wchars in settings-on-cloud path (0 means settings-on-cloud is disabled)
-	if (sz) {
-		usesCloud = true;
-		std::wstring wsCloudDir(sz + 1, '\0');
-		LRESULT szGot = ::SendMessage(hwnd._nppHandle, NPPM_GETSETTINGSONCLOUDPATH, sz + 1, reinterpret_cast<LPARAM>(wsCloudDir.data()));
-		if (szGot == sz) {
-			pcjHelper::delNull(wsCloudDir);
-			dir.cfg = wsCloudDir;
+	bool usesSettingsDir = false;
+	if (isNppVerAtLeast(8, 8, 6, 0)) {
+		// with N++ 8.8.6 and newer, the added message simplifies things to not need the commplicated _askSettingsDir() to extract -settingsDir from command line string
+		sz = ::SendMessage(hwnd._nppHandle, NPPM_GETNPPSETTINGSDIRPATH, 0, 0); // get number of wchars
+		if (sz) {
+			std::wstring wsNppUserDir(sz + 1, '\0');
+			LRESULT szGot = ::SendMessage(hwnd._nppHandle, NPPM_GETNPPSETTINGSDIRPATH, sz + 1, reinterpret_cast<LPARAM>(wsNppUserDir.data()));
+			if (szGot == sz) {
+				pcjHelper::delNull(wsNppUserDir);
+				dir.cfg = wsNppUserDir;
+			}
+		}
+
+		// if the _userDir is not AppData||NppDirectory, AND if cloud not enabled, then it is -settingsDir
+		if (dir.cfg != dir.appDataEquiv) {
+			if (!::SendMessage(hwnd._nppHandle, NPPM_GETSETTINGSONCLOUDPATH, 0, 0))
+				usesSettingsDir = true;
 		}
 	}
-
-	// -settingsDir: if command-line option is enabled, use that directory for some config files
-	bool usesSettingsDir = false;
-	std::wstring wsSettingsDir = _askSettingsDir();
-	if (wsSettingsDir.length() > 0)
+	else
 	{
-		usesSettingsDir = true;
-		dir.cfg = wsSettingsDir;
+		////////////////////////////////
+		// Check for cloud and -settingsDir config-override locations
+		////////////////////////////////
+		sz = ::SendMessage(hwnd._nppHandle, NPPM_GETSETTINGSONCLOUDPATH, 0, 0); // get number of wchars in settings-on-cloud path (0 means settings-on-cloud is disabled)
+		if (sz) {
+			std::wstring wsCloudDir(sz + 1, '\0');
+			LRESULT szGot = ::SendMessage(hwnd._nppHandle, NPPM_GETSETTINGSONCLOUDPATH, sz + 1, reinterpret_cast<LPARAM>(wsCloudDir.data()));
+			if (szGot == sz) {
+				pcjHelper::delNull(wsCloudDir);
+				dir.cfg = wsCloudDir;
+			}
+		}
+
+		// -settingsDir: if command-line option is enabled, use that directory for some config files
+		std::wstring wsSettingsDir = _askSettingsDir();
+		if (wsSettingsDir.length() > 0)
+		{
+			usesSettingsDir = true;
+			dir.cfg = wsSettingsDir;
+		}
 	}
 
 	////////////////////////////////

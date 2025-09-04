@@ -19,6 +19,7 @@
 
 #include "CUDownloadModelDialog.h"
 #include <string>
+#include "NppMetaClass.h"
 
 std::wstring _dlmEditText = L"";
 bool _dlmInterruptFlag = false;
@@ -38,8 +39,8 @@ INT_PTR CALLBACK ciDlgCUDownloadModelProc(HWND hwndDlg, UINT uMsg, WPARAM wParam
 			////////
 			// need to know versions for making darkMode decisions
 			////////
-			LRESULT versionNpp = ::SendMessage(nppData._nppHandle, NPPM_GETNPPVERSION, 1, 0);	// HIWORD(nppVersion) = major version; LOWORD(nppVersion) = zero-padded minor (so 8|500 will come after 8|410)
-			LRESULT versionDarkDialog = MAKELONG(540, 8);		// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
+			gNppMetaInfo.populate();
+			LRESULT versionDarkDialog = gNppMetaInfo.verDotToLL(8, 5, 4, 0);	// requires 8.5.4.0 for NPPM_DARKMODESUBCLASSANDTHEME (NPPM_GETDARKMODECOLORS was 8.4.1, so covered)
 			bool isDM = (bool)::SendMessage(nppData._nppHandle, NPPM_ISDARKMODEENABLED, 0, 0);
 
 			////////
@@ -59,7 +60,7 @@ INT_PTR CALLBACK ciDlgCUDownloadModelProc(HWND hwndDlg, UINT uMsg, WPARAM wParam
 			////////
 			// trigger darkmode
 			////////
-			if (isDM && versionNpp >= versionDarkDialog) {
+			if (isDM && gNppMetaInfo.isNppVerAtLeast(versionDarkDialog)) {
 				::SendMessage(nppData._nppHandle, NPPM_DARKMODESUBCLASSANDTHEME, static_cast<WPARAM>(NppDarkMode::dmfInit), reinterpret_cast<LPARAM>(g_hwndCUDownloadModelDlg));
 			}
 
