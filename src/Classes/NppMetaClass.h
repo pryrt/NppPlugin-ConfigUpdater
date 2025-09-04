@@ -31,6 +31,26 @@ public:
 			cfgThemes;
 	} dir;
 
+	////////////////////////////////
+	// NPP VERSION and comparisons
+	////////////////////////////////
+	LRESULT ver; // npp version
+
+	// compare NppVersion vs desired threshold
+	bool isNppVerAtLeast(LRESULT maj, LRESULT min, LRESULT sub, LRESULT rev) { return ver >= verDotToLL(maj, min, sub, rev); }
+	bool isNppVerAtLeast(LRESULT verThreshold) { return ver >= verThreshold; }
+	bool isNppVerNewerThan(LRESULT maj, LRESULT min, LRESULT sub, LRESULT rev) { return ver > verDotToLL(maj, min, sub, rev); }
+	bool isNppVerNewerThan(LRESULT verThreshold) { return ver > verThreshold; }
+	bool isNppVerNoMoreThan(LRESULT maj, LRESULT min, LRESULT sub, LRESULT rev) { return ver <= verDotToLL(maj, min, sub, rev); }
+	bool isNppVerNoMoreThan(LRESULT verThreshold) { return ver <= verThreshold; }
+	bool isNppVerOlderThan(LRESULT maj, LRESULT min, LRESULT sub, LRESULT rev) { return ver < verDotToLL(maj, min, sub, rev); }
+	bool isNppVerOlderThan(LRESULT verThreshold) { return ver < verThreshold; }
+
+	// converts maj.min.sub.rev to N++-style LRESULT
+	LRESULT verDotToLL(LRESULT maj, LRESULT min, LRESULT sub, LRESULT rev) { return (maj << 16) | (100 * min + 10 * sub + rev); }
+
+
+
 private:
 	bool _isInitialized;
 	std::wstring _askSettingsDir(void);
