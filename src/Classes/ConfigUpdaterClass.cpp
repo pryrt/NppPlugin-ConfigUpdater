@@ -279,6 +279,21 @@ void ConfigUpdater::_initInternalState(void)
 	_initLangsValidatorXSD();
 }
 
+void ConfigUpdater::rewriteValidators(void)
+{
+	// make sure variables are set correctly
+	_initThemeValidatorXSD();
+	_initLangsValidatorXSD();
+
+	// delete the old copies
+	_deleteOldFileIfNeeded(_wsThemeValidatorXsdFileName);
+	_deleteOldFileIfNeeded(_wsLangsValidatorXsdFileName);
+
+	// create the new XSD files
+	_initThemeValidatorXSD();
+	_initLangsValidatorXSD();
+}
+
 // set the contents of the _bstr_ThemeValidatorXSD
 void ConfigUpdater::_initThemeValidatorXSD(void)
 {

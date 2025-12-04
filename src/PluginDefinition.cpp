@@ -80,7 +80,9 @@ void commandMenuInit()
     setCommand(1, TEXT("Download Newest Model Files"), menucall_DownloadModelFiles, NULL, false);
     setCommand(2, TEXT("Validate Config Files"), menucall_ValidateConfigFiles , NULL, false);
     setCommand(3, TEXT(""), NULL, NULL, false);
-    setCommand(4, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
+    setCommand(4, TEXT("Reset Validators"), menucall_ResetValidators, NULL, false);
+    setCommand(5, TEXT(""), NULL, NULL, false);
+    setCommand(6, TEXT("About ConfigUpdater"), menucall_AboutDlg, NULL, false);
 }
 
 //
@@ -139,6 +141,12 @@ void menucall_ValidateConfigFiles(void)
 {
     // non-modal allows to still interact with the parent
     CreateDialogParam((HINSTANCE)_hModule, MAKEINTRESOURCE(IDD_CU_VALIDATION_DLG), nppData._nppHandle, (DLGPROC)ciDlgCUValidationProc, (LPARAM)NULL);
+}
+
+void menucall_ResetValidators(void)
+{
+    static ConfigUpdater oConf(nppData._nppHandle);
+    oConf.rewriteValidators();
 }
 
 void menucall_DownloadModelFiles(void)

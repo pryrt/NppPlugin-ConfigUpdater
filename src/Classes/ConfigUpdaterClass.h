@@ -22,6 +22,7 @@ public:
 	ConfigUpdater(HWND hwndNpp);
 	bool go(bool isIntermediateSorted);
 	bool hadValidationError(void) { return _hadValidationError; };	// returns whether or not there was at least one validation error during the configuration update
+	void rewriteValidators(void);
 
 private:
 	// internal attributes

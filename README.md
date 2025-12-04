@@ -8,6 +8,8 @@ When Notepad++ updates, it tends to avoid updating important things like `langs.
 
 This plugin uses the `langs.model.xml` and `stylers.model.xml` which ship with every copy of Notepad++, and looks for any information that's in the model files, but not in your active config files.  It will copy over that missing information; when you then restart Notepad++, the syntax highlighting and keyword lists will have been updated to include all the settings in your current Notepad++ version.
 
+_NOTE_: Notepad++ v8.8.9 and newer automatically supplies missing styles, languages, and keyword lists from your model files, taking care of the primary feature of this plugin.  But this plugin still does it in bulk (even for inactive themes), and allows you to re-download your model files, and do manual file validation (which is useful when you are developing a new theme).
+
 ## Installation
 
 You can install the plugin using Notepad++'s **Plugins Admin**, or by unzipping the appropriate archive from the [latest release](https://github.com/pryrt/NppPlugin-ConfigUpdater/releases/latest), so that `ConfigUpdater.dll` ends up in the `c:\Program Files\Notepad++\plugins\ConfigUpdater\` directory (or equivalent, for your installation's location).  (The files in the `docs\` folder from the zipfile could also be extracted into `c:\Program Files\Notepad++\plugins\ConfigUpdater\docs\` directory, but that's not required).
@@ -61,6 +63,12 @@ Historically, some of the themes have had XML problems, such as two styles in th
     - `'xyz' violates enumeration constraint of 'instre1 instre2 ...'
         - _Description_: The `name` for the `<Keywords>` entry for the given language must be one of the listed values: `instre1 instre2 type1 type2 type3 type4 type5 type6 type7 substyle1 substyle2 substyle3 substyle4 substyle5 substyle6 substyle7`.  It cannot be an empty string (so _not_ `name=""`), and it cannot be any other value that wasn't listed.
         - _Fix_: You need to set the `name` attribute to one of those values.  You can use **langs.model.xml** to compare the `<Keywords>` entry in the model that has the same entry in your XML, and see what name that `<Keywords>` element should have.
+
+### Reset Validators
+
+If the validators are complaining about an attribute or element that appears to be the same in the `*.model.xml` file, it may be that the XSD in the plugins config directory is out-of-date.  You can use **Plugins > ConfigUpdater > Update Validators** to delete the old copy, then you can rerun the manual validation or the download-and-validate, and see if that fixes the issue.
+
+If the `*.model.xml` file still has attributes or elements that the validator claims are wrong, you can go to https://github.com/notepad-plus-plus/notepad-plus-plus/tree/master/PowerEditor/Test/xmlValidator and grab the newest copy of the `theme.xsd` and `langs.xsd`, and overwrite your `%AppData%\Notepad++\Plugins\Config\ConfigUpdater\*.xsd` files (or equivalent location, if using local configuration, Cloud Directory, or `-settingsDir`).  If this fixes the problem, please create an issue at https://github.com/pryrt/NppPlugin-ConfigUpdater/issues to ask that the XSD be updated (if there isn't already such an issue).
 
 ## Notes
 
