@@ -38,7 +38,7 @@ const TCHAR NPP_PLUGIN_NAME[] = TEXT("ConfigUpdater");
 //
 // Here define the number of your plugin commands
 //
-const int nbFunc = 5;
+const int nbFunc = 7;
 
 
 //
@@ -75,6 +75,7 @@ bool setCommand(size_t index, TCHAR *cmdName, PFUNCPLUGINCMD pFunc, ShortcutKey 
 void menucall_UpdateConfigFiles();
 void menucall_DownloadModelFiles();
 void menucall_ValidateConfigFiles();
+void menucall_ResetValidators();
 void menucall_AboutDlg();
 void buttoncall_ValidationHelpDlg();
 

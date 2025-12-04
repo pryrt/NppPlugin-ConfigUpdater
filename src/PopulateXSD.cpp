@@ -132,7 +132,6 @@ namespace PopulateXSD {
                   <xs:selector xpath="WordsStyle"/>
                   <xs:field xpath="@styleID" />
                 </xs:unique>
-
               </xs:element>
             </xs:sequence>
           </xs:complexType>
@@ -160,6 +159,7 @@ namespace PopulateXSD {
           </xs:unique>
         </xs:element>
       </xs:sequence>
+      <xs:attribute name="modelDate" type="xs:integer" use="optional"/>
     </xs:complexType>
   </xs:element>
 </xs:schema>
@@ -230,6 +230,7 @@ namespace PopulateXSD {
           </xs:complexType>
         </xs:element>
       </xs:sequence>
+      <xs:attribute name="modelDate" type="xs:integer" use="optional"/>
     </xs:complexType>
   </xs:element>
 </xs:schema>
