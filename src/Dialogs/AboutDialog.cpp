@@ -60,7 +60,7 @@ INT_PTR CALLBACK abtDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 			// Need to set up any controls _before_ running the subclass-and-theme
 			//		(however, the hyperlink fix must come after subclass-and-theme, otherwise hyperlink is undone)
 			wchar_t title[256];
-			swprintf_s(title, L"%s v%s %s", L"CollectionInterface", VERSION_WSTR, BITNESS);
+			swprintf_s(title, L"%s v%s %s", L"ConfigUpdater", VERSION_WSTR, BITNESS);
 			Edit_SetText(GetDlgItem(hwndDlg, IDC_VERSION), title);
 
 			// Now do subclass-and-them

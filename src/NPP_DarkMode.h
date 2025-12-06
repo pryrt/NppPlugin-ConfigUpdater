@@ -1,7 +1,7 @@
 /*
 	Copyright (C) 2025  Peter C. Jones <pryrtcode@pryrt.com>
 
-	This file is part of the source code for the CollectionInterface plugin for Notepad++
+	This file is part of the source code for the ConfigUpdater plugin for Notepad++
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by

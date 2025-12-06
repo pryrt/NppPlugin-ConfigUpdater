@@ -107,7 +107,7 @@ bool ConfigDownloader::downloadFileToDisk(const std::wstring& url, const std::ws
 	}
 
 	// now that I know it's safe to write the file, try opening the internet connection
-	HINTERNET hInternet = InternetOpen(L"CollectionInterfacePluginForN++", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+	HINTERNET hInternet = InternetOpen(L"ConfigUpdaterPluginForN++", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
 	if (hInternet == NULL) {
 		_dl_errmsg = L"Could not connect to internet when trying to download\r\n" + url;
 		return false;

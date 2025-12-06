@@ -35,7 +35,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
 		if (fHyperlink)
 		{
 			LRESULT lr = CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
-			SetTextColor(hdc, _hyperlink_rgb); // CollectionInterface plugin: changed this to configurable
+			SetTextColor(hdc, _hyperlink_rgb); // ConfigUpdater plugin: changed this to configurable
 			return lr;
 		}
 
