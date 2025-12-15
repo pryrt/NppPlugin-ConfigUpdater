@@ -160,6 +160,7 @@ namespace PopulateXSD {
         </xs:element>
       </xs:sequence>
       <xs:attribute name="modelDate" type="xs:integer" use="optional"/>
+      <xs:attribute name="modelModifTimestamp" type="xs:integer" use="optional"/>
     </xs:complexType>
   </xs:element>
 </xs:schema>
@@ -231,6 +232,7 @@ namespace PopulateXSD {
         </xs:element>
       </xs:sequence>
       <xs:attribute name="modelDate" type="xs:integer" use="optional"/>
+      <xs:attribute name="modelModifTimestamp" type="xs:integer" use="optional"/>
     </xs:complexType>
   </xs:element>
 </xs:schema>
